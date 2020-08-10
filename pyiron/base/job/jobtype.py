@@ -56,6 +56,7 @@ JOB_CLASS_DICT = {
     "SxPhonons": "pyiron.thermodynamics.sxphonons",
     "SxUniqDispl": "pyiron.thermodynamics.sxphonons",
     "TableJob": "pyiron.table.datamining",
+    "US": "pyiron.atomistics.master.umbrella_sampling",
     "Vasp": "pyiron.vasp.vasp",
     "VaspMetadyn": "pyiron.vasp.metadyn",
     "VaspSol": "pyiron.vasp.vaspsol",

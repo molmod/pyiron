@@ -101,7 +101,7 @@ class Project(ProjectCore):
                                              ‘ConvergenceEncutParallel’, ‘ConvergenceKpointParallel’, ’PhonopyMaster’,
                                              ‘DefectFormationEnergy’, ‘LammpsASE’, ‘PipelineMaster’,
                                              ’TransformationPath’, ‘ThermoIntEamQh’, ‘ThermoIntDftEam’, ‘ScriptJob’,
-                                             ‘ListMaster']
+                                             ‘ListMaster’, ‘Gaussian’, ‘Yaff’, ‘US’]
     """
 
     def __init__(self, path="", user=None, sql_query=None):
@@ -142,7 +142,10 @@ class Project(ProjectCore):
         - ‘ThermoIntEamQh’:
         - ‘ThermoIntDftEam’:
         - ‘ScriptJob’: Python script or jupyter notebook job container
-        - ‘ListMaster': list of jobs
+        - ‘ListMaster’: list of jobs
+        - ‘Gaussian’:
+        - ‘Yaff’:
+        - ‘US’:
 
         Args:
             job_type (str): job type can be ['StructureContainer’, ‘StructurePipeline’, ‘AtomisticExampleJob’,
@@ -153,7 +156,7 @@ class Project(ProjectCore):
                                              ‘ConvergenceEncutParallel’, ‘ConvergenceKpointParallel’, ’PhonopyMaster’,
                                              ‘DefectFormationEnergy’, ‘LammpsASE’, ‘PipelineMaster’,
                                              ’TransformationPath’, ‘ThermoIntEamQh’, ‘ThermoIntDftEam’, ‘ScriptJob’,
-                                             ‘ListMaster']
+                                             ‘ListMaster’, ‘Gaussian’, ‘Yaff’, ‘US’]
             job_name (str): name of the job
 
         Returns:

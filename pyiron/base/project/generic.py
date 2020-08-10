@@ -636,14 +636,14 @@ class Project(ProjectPath):
     def get_external_input():
         """
         Get external input either from the HDF5 file of the ScriptJob object which executes the Jupyter notebook
-        or from an input.json file located in the same directory as the Jupyter notebook. 
-        
+        or from an input.json file located in the same directory as the Jupyter notebook.
+
         Returns:
             dict: Dictionary with external input
         """
         inputdict = Notebook.get_custom_dict()
         if inputdict is None:
-            raise ValueError("No input found, either there is an issue with your ScriptJob, " + 
+            raise ValueError("No input found, either there is an issue with your ScriptJob, " +
                              "or your input.json file is not located in the same directory " +
                              "as your Jupyter Notebook.")
         return inputdict
@@ -1195,7 +1195,7 @@ class Project(ProjectPath):
         return queue_is_empty()
 
     @staticmethod
-    def queue_enable_reservation(item):
+    def queue_enable_reservation(item,reservation_id):
         """
         Enable a reservation for a particular job within the queuing system
 
@@ -1205,7 +1205,7 @@ class Project(ProjectPath):
         Returns:
             str: Output from the queuing system as string - optimized for the Sun grid engine
         """
-        return queue_enable_reservation(item)
+        return queue_enable_reservation(item,reservation_id)
 
     @staticmethod
     def queue_check_job_is_waiting_or_running(item):

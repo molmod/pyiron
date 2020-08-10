@@ -995,6 +995,10 @@ class GenericJob(JobCore):
         - ‘ThermoIntDftEam’:
         - ‘ScriptJob’: Python script or jupyter notebook job container
         - ‘ListMaster': list of jobs
+        - ‘Gaussian’:
+        - ‘Yaff’:
+        - ‘QuickFF’:
+        - ‘US’:
 
         Args:
             job_type (str): job type can be ['StructureContainer’, ‘StructurePipeline’, ‘AtomisticExampleJob’,
@@ -1005,7 +1009,7 @@ class GenericJob(JobCore):
                                              ‘ConvergenceEncutParallel’, ‘ConvergenceKpointParallel’, ’PhonopyMaster’,
                                              ‘DefectFormationEnergy’, ‘LammpsASE’, ‘PipelineMaster’,
                                              ’TransformationPath’, ‘ThermoIntEamQh’, ‘ThermoIntDftEam’, ‘ScriptJob’,
-                                             ‘ListMaster']
+                                             ‘ListMaster', ‘Gaussian’, ‘Yaff’, ‘QuickFF’, ‘US’]
             job_name (str): name of the job
 
         Returns:
