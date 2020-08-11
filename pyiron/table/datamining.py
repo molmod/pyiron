@@ -349,7 +349,7 @@ class PyironTable(object):
                 skip_table_update = True
         else:
             job_update_lst = [
-                self._project.inspect(job_id) 
+                self._project.inspect(job_id)
                 for job_id in self._get_filtered_job_ids_from_project()
             ]
             job_update_lst = [

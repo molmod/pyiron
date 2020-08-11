@@ -25,9 +25,9 @@ __date__ = "Nov 6, 2019"
 
 def get_steinhardt_parameter_job(job, cutoff=3.50, n_clusters=2, q=[4, 6]):
     return get_steinhardt_parameter_structure(
-        structure=job.get_stucture(), 
-        cutoff=cutoff, 
-        n_clusters=n_clusters, 
+        structure=job.get_stucture(),
+        cutoff=cutoff,
+        n_clusters=n_clusters,
         q=q
     )
 
@@ -35,20 +35,20 @@ def get_steinhardt_parameter_job(job, cutoff=3.50, n_clusters=2, q=[4, 6]):
 def get_steinhardt_parameter_structure(structure, cutoff=3.50, n_clusters=2, q=[4, 6]):
     sys = pc.System()
     sys.read_inputfile(
-        pyiron_to_ase(structure), 
-        format='ase', 
+        pyiron_to_ase(structure),
+        format='ase',
         is_triclinic=not UnfoldingPrism(structure.cell, digits=15).is_skewed()
     )
     sys.find_neighbors(
-        method='cutoff', 
+        method='cutoff',
         cutoff=cutoff
     )
     sys.calculate_q(
-        q, 
+        q,
         averaged=True
     )
     sysq = sys.get_qvals(
-        q, 
+        q,
         averaged=True
     )
     cl = cluster.KMeans(
