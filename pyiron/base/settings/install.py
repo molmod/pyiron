@@ -22,10 +22,12 @@ __status__ = "production"
 __date__ = "Sep 1, 2017"
 
 
-def _download_resources(zip_file="resources.zip",
-                        resource_directory="~/pyiron/resources",
-                        giturl_for_zip_file="https://github.com/pyiron/pyiron-resources/archive/master.zip",
-                        git_folder_name="pyiron-resources-master"):
+def _download_resources(
+    zip_file="resources.zip",
+    resource_directory="~/pyiron/resources",
+    giturl_for_zip_file="https://github.com/pyiron/pyiron-resources/archive/master.zip",
+    git_folder_name="pyiron-resources-master",
+):
     """
     Download pyiron resources from Github
 
@@ -36,27 +38,38 @@ def _download_resources(zip_file="resources.zip",
         git_folder_name (str): name of the extracted folder
 
     """
-    user_directory = os.path.normpath(os.path.abspath(os.path.expanduser(resource_directory)))
+    user_directory = os.path.normpath(
+        os.path.abspath(os.path.expanduser(resource_directory))
+    )
+    if os.path.exists(user_directory) and not os.listdir(user_directory):
+        os.rmdir(user_directory)
     temp_directory = tempfile.gettempdir()
     temp_zip_file = os.path.join(temp_directory, zip_file)
     temp_extract_folder = os.path.join(temp_directory, git_folder_name)
     urllib2.urlretrieve(giturl_for_zip_file, temp_zip_file)
     if os.path.exists(user_directory):
-        raise ValueError('The resource directory exists already, therefore it can not be created: ', user_directory)
+        raise ValueError(
+            "The resource directory exists already, therefore it can not be created: ",
+            user_directory,
+        )
     with ZipFile(temp_zip_file) as zip_file_object:
         zip_file_object.extractall(temp_directory)
     copytree(temp_extract_folder, user_directory)
-    if os.name != 'nt':  #
+    if os.name != "nt":  #
         for root, dirs, files in os.walk(user_directory):
             for file in files:
-                if '.sh' in file:
+                if ".sh" in file:
                     st = os.stat(os.path.join(root, file))
                     os.chmod(os.path.join(root, file), st.st_mode | stat.S_IEXEC)
     os.remove(temp_zip_file)
     rmtree(temp_extract_folder)
 
 
-def _write_config_file(file_name='~/.pyiron', project_path='~/pyiron/projects', resource_path='~/pyiron/resources'):
+def _write_config_file(
+    file_name="~/.pyiron",
+    project_path="~/pyiron/projects",
+    resource_path="~/pyiron/resources",
+):
     """
     Write configuration file and create the corresponding project path.
 
@@ -65,18 +78,21 @@ def _write_config_file(file_name='~/.pyiron', project_path='~/pyiron/projects', 
         project_path (str): the location where pyiron is going to store the pyiron projects
         resource_path (str): the location where the resouces (executables, potentials, ...) for pyiron are stored.
     """
-    config_file   = os.path.normpath(os.path.abspath(os.path.expanduser(file_name)))
-    project_path  = os.path.normpath(os.path.abspath(os.path.expanduser(project_path)))
-    resource_path = os.path.normpath(os.path.abspath(os.path.expanduser(resource_path)))
-
-    if not os.path.exists(project_path):
-        os.makedirs(project_path)
-
+    config_file = os.path.normpath(os.path.abspath(os.path.expanduser(file_name)))
     if not os.path.isfile(config_file):
-        with open(config_file, 'w') as cf:
-            cf.writelines(['[DEFAULT]\n',
-                           'PROJECT_PATHS = ' + project_path + '\n',
-                           'RESOURCE_PATHS = ' + resource_path + '\n'])
+        with open(config_file, "w") as cf:
+            cf.writelines(
+                [
+                    "[DEFAULT]\n",
+                    "PROJECT_PATHS = " + project_path + "\n",
+                    "RESOURCE_PATHS = " + resource_path + "\n",
+                ]
+            )
+        project_path = os.path.normpath(
+            os.path.abspath(os.path.expanduser(project_path))
+        )
+        if not os.path.exists(project_path):
+            os.makedirs(project_path)
 
 def _write_environ_var(config_file_name='~/.pyiron'):
     config_file = os.path.normpath(os.path.abspath(os.path.expanduser(config_file_name)))
@@ -122,13 +138,47 @@ def _write_full_environ_var(env_loc=None,location='~/'):
 
     return download_path
 
+def install_dialog():
+    user_input = None
+    if "PYIRONCONFIG" in os.environ.keys():
+        config_file = os.environ["PYIRONCONFIG"]
+    else:
+        config_file = "~/.pyiron"
 
-def install_pyiron(config_file_name='~/.pyiron',
-                   zip_file="resources.zip",
-                   project_path='~/pyiron/projects',
-                   resource_directory="~/pyiron/resources",
-                   giturl_for_zip_file="https://github.com/pyiron/pyiron-resources/archive/master.zip",
-                   git_folder_name="pyiron-resources-master"):
+    while user_input not in ['yes', 'no']:
+        user_input = input('It appears that pyiron is not yet configured, do you want to create a default start configuration (recommended: yes). [yes/no]: ')
+    if user_input.lower() == 'yes' or user_input.lower() == 'y':
+        install_pyiron(config_file_name=config_file,
+                       zip_file="resources.zip",
+                       resource_directory="~/pyiron/resources",
+                       giturl_for_zip_file="https://github.com/pyiron/pyiron-resources/archive/master.zip",
+                       git_folder_name="pyiron-resources-master")
+    else:
+        user_input = None #reset input
+        while user_input not in ['yes', 'no']:
+            user_input = input('Do you want to provide an alternative configuration (recommended: yes). [yes/no]: ')
+        if user_input.lower() == 'yes' or user_input.lower() == 'y':
+            env_loc = input("Environment variable that acts as parent directory (DEFAULT = 'VSC_SCRATCH_KYUKON'): ")
+            location = input("Location for pyiron folder, within this parent directory (DEFAULT = 'nanoscale'): ")
+            if env_loc=='': env_loc='VSC_SCRATCH_KYUKON'
+            if location=='': location='nanoscale/'
+            if not location[-1]=='/': location+='/'
+            install_pyiron_env(env_loc=env_loc,
+                               location=location,
+                               zip_file="resources.zip",
+                               giturl_for_zip_file="https://github.com/SanderBorgmans/pyiron-resources/archive/hpc_ugent.zip",
+                               git_folder_name="pyiron-resources-hpc_ugent")
+        else:
+            raise ValueError('pyiron was not installed!')
+
+def install_pyiron(
+    config_file_name="~/.pyiron",
+    zip_file="resources.zip",
+    project_path="~/pyiron/projects",
+    resource_directory="~/pyiron/resources",
+    giturl_for_zip_file="https://github.com/pyiron/pyiron-resources/archive/master.zip",
+    git_folder_name="pyiron-resources-master",
+):
     """
     Function to configure the pyiron installation.
 
@@ -140,13 +190,20 @@ def install_pyiron(config_file_name='~/.pyiron',
         giturl_for_zip_file (str): url for the zipped resources file on github
         git_folder_name (str): name of the extracted folder
     """
-    # Build directories if install_pyiron has been skipped for custom pyiron config file
-    _write_config_file(file_name=config_file_name, project_path=project_path, resource_path=resource_directory)
-    _write_environ_var(config_file_name=config_file_name)
-    _download_resources(zip_file=zip_file,
-                        resource_directory=resource_directory,
-                        giturl_for_zip_file=giturl_for_zip_file,
-                        git_folder_name=git_folder_name)
+    _write_config_file(
+        file_name=config_file_name,
+        project_path=project_path,
+        resource_path=resource_directory,
+    )
+    _write_environ_var(
+        config_file_name=config_file_name
+    )
+    _download_resources(
+        zip_file=zip_file,
+        resource_directory=resource_directory,
+        giturl_for_zip_file=giturl_for_zip_file,
+        git_folder_name=git_folder_name,
+    )
 
 def install_pyiron_env(env_loc=None,
                        location='~/',
@@ -166,50 +223,9 @@ def install_pyiron_env(env_loc=None,
     """
     # Build directories if install_pyiron has been skipped for custom pyiron config file
     download_path = _write_full_environ_var(env_loc=env_loc,location=location)
-    _download_resources(zip_file=zip_file,
-                        resource_directory=download_path+'pyiron/resources',
-                        giturl_for_zip_file=giturl_for_zip_file,
-                        git_folder_name=git_folder_name)
-
-def command_line(argv):
-    """
-    Parse the command line arguments.
-
-    Args:
-        argv: Command line arguments
-
-    """
-    config_file_name = '~/.pyiron'
-    zip_file = "resources.zip"
-    resource_path = "~/pyiron/resources"
-    project_path = "~/pyiron/projects"
-    giturl_for_zip_file = "https://github.com/pyiron/pyiron-resources/archive/master.zip"
-    git_folder_name = "pyiron-resources-master"
-    try:
-        opts, args = getopt.getopt(argv, "c:r:u:p:h", ["config=", "resource_path=", "project_path=", "url="])
-    except getopt.GetoptError:
-        print('install.py -c <config_file> -p <project_path> -r <resource_dir> -u <url>')
-        sys.exit()
-    else:
-        for opt, arg in opts:
-            if opt in ("-h", "--help"):
-                print('install.py -c <config_file> -p <project_path> -r <resource_dir> -u <url>')
-                sys.exit()
-            elif opt in ("-c", "--config"):
-                config_file_name = arg
-            elif opt in ("-r", "--resource_path"):
-                resource_path = arg
-            elif opt in ("-p", "--project_path"):
-                project_path = arg
-            elif opt in ("-u", "--url"):
-                giturl_for_zip_file = arg
-        install_pyiron(config_file_name=config_file_name,
-                       zip_file=zip_file,
-                       project_path=project_path,
-                       resource_directory=resource_path,
-                       giturl_for_zip_file=giturl_for_zip_file,
-                       git_folder_name=git_folder_name)
-
-
-if __name__ == "__main__":
-    command_line(sys.argv[1:])
+    _download_resources(
+        zip_file=zip_file,
+        resource_directory=download_path+'pyiron/resources',
+        giturl_for_zip_file=giturl_for_zip_file,
+        git_folder_name=git_folder_name
+    )

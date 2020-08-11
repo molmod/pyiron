@@ -61,6 +61,7 @@ class Gaussian(GenericDFTJob):
         with self.project_hdf5.open("output") as hdf5_output:
             for k, v in output_dict.items():
                 hdf5_output[k] = v
+            hdf5_output['generic/indices'] = np.vstack([self.structure.indices] * output_dict['generic/positions'].shape[0])
 
 
     def to_hdf(self, hdf=None, group_name=None):
@@ -447,6 +448,8 @@ def fchk2dict(fchk):
     fchkdict['structure/dft/n_alpha_electrons']   = fchk.fields.get('Number of alpha electrons')
     fchkdict['structure/dft/n_beta_electrons']    = fchk.fields.get('Number of beta electrons')
     fchkdict['structure/dft/n_basis_functions']   = fchk.fields.get('Number of basis functions')
+    fchkdict['generic/indices']       = np.array([sorted(list(set(fchkdict['structure/numbers']))).index(number) for number in fchkdict['structure/numbers']])
+
 
     # Orbital information
     fchkdict['structure/dft/alpha_orbital_e']     = fchk.fields.get('Alpha Orbital Energies')

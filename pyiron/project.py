@@ -23,6 +23,10 @@ import pyiron.atomistics.structure.pyironase as ase
 from pyiron.atomistics.structure.atoms import Atoms
 from pyiron.atomistics.structure.generator import create_surface, create_ase_bulk, create_structure
 from pyiron.atomistics.master.parallel import pipe
+from pyiron.atomistics.nma.nma import NMA
+from pyiron.atomistics.md_analysis.rdf import RDF
+
+from molmod.units import *
 
 
 __author__ = "Joerg Neugebauer, Jan Janssen"
@@ -667,6 +671,30 @@ class Project(ProjectCore):
                 parent_element=parent_element, new_element=new_element_name
             )
         return periodic_table.element(new_element_name)
+
+    @staticmethod
+    def apply_nma(job):
+        """
+
+        Args:
+            job : The job object used to do a normal mode analysis, requires a gradient and hessian in the output
+        Returns:
+            atomistics.nma.nma.NMA instance
+        """
+        return NMA(job)
+
+    @staticmethod
+    def calc_RDF(job,atom_1,atom_2,rcut=20*angstrom,rspacing=0.01*angstrom,nimage=1,start=0,stop=-1,nf=0,save=False,atomic_units=False):
+        """
+
+        Args:
+            job : The job object used to calculate the RDF, requires a trajectory of cells and positions
+            atom_1, atom_2: atoms for which to construct an RDF
+            other parameters are explained in RDF class
+        Returns:
+            atomistics.md_analysis.rdf.RDF instance
+        """
+        return RDF(job,atom_1,atom_2,rcut,rspacing,nimage,start,stop,nf,save,atomic_units)
 
     # Graphical user interfaces
     def gui(self):

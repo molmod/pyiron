@@ -11,7 +11,7 @@ from configparser import ConfigParser
 from pathlib2 import Path
 from pyiron.base.settings.logger import setup_logger
 from pyiron.base.database.generic import DatabaseAccess
-from pyiron.base.settings.install import install_pyiron,install_pyiron_env
+from pyiron.base.settings.install import install_pyiron
 
 """
 The settings file provides the attributes of the configuration as properties.
@@ -77,6 +77,8 @@ class Settings(with_metaclass(Singleton)):
             "sql_type": "SQLite",
             "sql_user_key": None,
             "sql_database": None,
+            "project_check_enabled": True,
+            "disable_database": False,
         }
         environment = os.environ
         if "PYIRONCONFIG" in environment.keys():
@@ -90,11 +92,10 @@ class Settings(with_metaclass(Singleton)):
                 environment=environment,
                 config=self._configuration
             )
-            self._read_external_config(config=self._configuration) # fix lists
-            # assume that the parsed directories are absolute
         else:
-            self._install_dialog(config_file=config_file)
-            self._config_parse_file(config_file=config_file)
+            print("Fall back to default configuration: "
+                  "{'resource_paths': ['~/pyiron/resources'], "
+                  "'project_paths': ['~/pyiron/projects']}")
 
         # Take dictionary as primary source - overwrite everything
         self._read_external_config(config=config)
@@ -103,15 +104,15 @@ class Settings(with_metaclass(Singleton)):
             convert_path(path) + "/" if path[-1] != "/" else convert_path(path)
             for path in self._configuration["project_paths"]
         ]
-
         self._configuration["resource_paths"] = [
             convert_path(path) for path in self._configuration["resource_paths"]
         ]
 
         # Build the SQLalchemy connection strings
-        self._configuration = self.convert_database_config(
-            config=self._configuration
-        )
+        if not self.database_is_disabled:
+            self._configuration = self.convert_database_config(
+                config=self._configuration
+            )
         self._database = None
         self._use_local_database = False
         self._queue_adapter = None
@@ -129,6 +130,14 @@ class Settings(with_metaclass(Singleton)):
     @property
     def queue_adapter(self):
         return self._queue_adapter
+
+    @property
+    def project_check_enabled(self):
+        return self._configuration["project_check_enabled"]
+
+    @property
+    def database_is_disabled(self):
+        return self._configuration["disable_database"]
 
     @property
     def publication_lst(self):
@@ -177,18 +186,12 @@ class Settings(with_metaclass(Singleton)):
         """
         return self._configuration["resource_paths"]
 
-    def __del__(self):
-        """
-        Close database connection
-        """
-        self.close_connection()
-
     def open_connection(self):
         """
         Internal function to open the connection to the database. Only after this function is called the database is
         accessable.
         """
-        if self._database is None:
+        if self._database is None and not self.database_is_disabled:
             self._database = DatabaseAccess(
                 self._configuration["sql_connection_string"],
                 self._configuration["sql_table_name"],
@@ -202,7 +205,7 @@ class Settings(with_metaclass(Singleton)):
             file_name (str): SQLite database file name
             cwd (str/None): directory where the SQLite database file is located in
         """
-        if not self._use_local_database:
+        if not self._use_local_database and not self.database_is_disabled:
             if cwd is None and not os.path.isabs(file_name):
                 file_name = os.path.join(os.path.abspath(os.path.curdir), file_name)
             elif cwd is not None:
@@ -213,13 +216,13 @@ class Settings(with_metaclass(Singleton)):
             )
             self._use_local_database = True
         else:
-            print("Database is already in local mode!")
+            print("Database is already in local mode or disabled!")
 
     def switch_to_central_database(self):
         """
         Switch to central database
         """
-        if self._use_local_database:
+        if self._use_local_database and not self.database_is_disabled:
             self.close_connection()
             self._database = DatabaseAccess(
                 self._configuration["sql_connection_string"],
@@ -227,13 +230,13 @@ class Settings(with_metaclass(Singleton)):
             )
             self._use_local_database = False
         else:
-            print("Database is already in central mode!")
+            print("Database is already in central mode or disabled!")
 
     def switch_to_viewer_mode(self):
         """
         Switch from user mode to viewer mode - if viewer_mode is enable pyiron has read only access to the database.
         """
-        if self._configuration["sql_view_connection_string"] is not None:
+        if self._configuration["sql_view_connection_string"] is not None and not self.database_is_disabled:
             if not self._database.viewer_mode:
                 self.close_connection()
                 self._database = DatabaseAccess(
@@ -250,7 +253,7 @@ class Settings(with_metaclass(Singleton)):
         """
         Switch from viewer mode to user mode - if viewer_mode is enable pyiron has read only access to the database.
         """
-        if self._configuration["sql_view_connection_string"] is not None:
+        if self._configuration["sql_view_connection_string"] is not None and not self.database_is_disabled:
             if self._database.viewer_mode:
                 self.close_connection()
                 self._database = DatabaseAccess(
@@ -283,6 +286,8 @@ class Settings(with_metaclass(Singleton)):
         """
         if full_path[-1] != "/":
             full_path += "/"
+        if not self.project_check_enabled:
+            return None
         for path in self._configuration["project_paths"]:
             if path in full_path:
                 return path
@@ -326,10 +331,7 @@ class Settings(with_metaclass(Singleton)):
             dict: dictionary with the environment configuration
         """
         # load config parser - depending on Python version
-        if sys.version_info.major == 2:
-            parser = ConfigParser()
-        else:
-            parser = ConfigParser(inline_comment_prefixes=(";",))
+        parser = ConfigParser(inline_comment_prefixes=(";",))
 
         # read config
         parser.read(config_file)
@@ -359,6 +361,12 @@ class Settings(with_metaclass(Singleton)):
             ]
         else:
             ValueError("No project path identified!")
+        if parser.has_option(section, "PROJECT_CHECK_ENABLED"):
+            self._configuration["project_check_enabled"] = \
+                parser.getboolean(section, "PROJECT_CHECK_ENABLED")
+        if parser.has_option(section, "DISABLE_DATABASE"):
+            self._configuration["disable_database"] = \
+                parser.getboolean(section, "DISABLE_DATABASE")
         if parser.has_option(section, "RESOURCE_PATHS"):
             self._configuration["resource_paths"] = [
                 convert_path(c.strip())
@@ -477,35 +485,6 @@ class Settings(with_metaclass(Singleton)):
                     )
 
     @staticmethod
-    def _install_dialog(config_file):
-        user_input = None
-        while user_input not in ['yes', 'no']:
-            user_input = input('It appears that pyiron is not yet configured, do you want to create a default start configuration (recommended: yes). [yes/no]: ')
-        if user_input.lower() == 'yes' or user_input.lower() == 'y':
-            install_pyiron(config_file_name=config_file,
-                           zip_file="resources.zip",
-                           resource_directory="~/pyiron/resources",
-                           giturl_for_zip_file="https://github.com/pyiron/pyiron-resources/archive/master.zip",
-                           git_folder_name="pyiron-resources-master")
-        else:
-            user_input = None #reset input
-            while user_input not in ['yes', 'no']:
-                user_input = input('Do you want to provide an alternative configuration (recommended: yes). [yes/no]: ')
-            if user_input.lower() == 'yes' or user_input.lower() == 'y':
-                env_loc = input("Environment variable that acts as parent directory (DEFAULT = 'VSC_SCRATCH_KYUKON'): ")
-                location = input("Location for pyiron folder, within this parent directory (DEFAULT = 'nanoscale'): ")
-                if env_loc=='': env_loc='VSC_SCRATCH_KYUKON'
-                if location=='': location='nanoscale/'
-                if not location[-1]=='/': location+='/'
-                install_pyiron_env(env_loc=env_loc,
-                                   location=location,
-                                   zip_file="resources.zip",
-                                   giturl_for_zip_file="https://github.com/SanderBorgmans/pyiron-resources/archive/hpc_ugent.zip",
-                                   git_folder_name="pyiron-resources-hpc_ugent")
-            else:
-                raise ValueError('pyiron was not installed!')
-
-    @staticmethod
     def get_config_from_environment(environment, config):
         env_key_mapping = {
             "PYIRONUSER": "user",
@@ -522,10 +501,17 @@ class Settings(with_metaclass(Singleton)):
             "PYIRONSQLTYPE": "sql_type",
             "PYIRONSQLUSERKEY": "sql_user_key",
             "PYIRONSQLDATABASE": "sql_database",
+            "PYIRONPROJECTCHECKENABLED": "project_check_enabled",
+            "PYIRONDISABLE": "disable_database",
         }
         for k, v in env_key_mapping.items():
             if k in environment.keys():
-                config[v] = environment[k]
+                if k in ["PYIRONPROJECTCHECKENABLED", "PYIRONDISABLE"]:
+                    config[v] = environment[k].lower() in ['t', 'true', 'y', 'yes']
+                elif k in ["PYIRONRESOURCEPATHS", "PYIRONPROJECTPATHS"]:
+                    config[v] = environment[k].split(':')
+                else:
+                    config[v] = environment[k]
         return config
 
     @property
@@ -559,8 +545,10 @@ class Settings(with_metaclass(Singleton)):
 def convert_path(path):
     """
     Convert path to POSIX path
+
     Args:
         path(str): input path
+
     Returns:
         str: absolute path in POSIX format
     """

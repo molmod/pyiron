@@ -3183,7 +3183,7 @@ class Atoms(object):
         kwargs are passed to ase.io.write.
         """
         pyiron_to_ase(self).write(filename=filename, format=format, **kwargs)
-    
+
     @staticmethod
     def get_calculator():
         return None
@@ -3317,7 +3317,7 @@ class Atoms(object):
                 epsilon (float/list/ndarray): epsilon matrix. If a single number is set, the same strain
                                               is applied in each direction. If a 3-dim vector is set, it
                                               will be multiplied by a unit matrix.
-                return_box (bool): whether to return a box. If set to True, only the returned box will 
+                return_box (bool): whether to return a box. If set to True, only the returned box will
                                    have the desired strain and the original box will stay unchanged.
         """
         epsilon = np.array([epsilon]).flatten()
@@ -3699,11 +3699,11 @@ class Atoms(object):
     def set_calculator(self, calc=None):
         """Attach calculator object."""
         pass
-     
+
     def get_calculator(self):
         """Get currently attached calculator object."""
         return None
-        
+
     def translate(self, displacement):
         """
         Translate atomic positions.
@@ -3775,7 +3775,6 @@ class Atoms(object):
 
         """
         from ase.io import write
-
         atoms = self.copy()
         atoms.arrays["positions"] = atoms.positions
         write(filename, atoms, format, **kwargs)

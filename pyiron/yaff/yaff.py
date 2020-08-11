@@ -280,6 +280,7 @@ def hdf2dict(h5):
     hdict['structure/masses'] = h5['system/masses'][:]
     hdict['structure/ffatypes'] = h5['system/ffatypes'][:]
     hdict['structure/ffatype_ids'] = h5['system/ffatype_ids'][:]
+
     if 'energy' in h5['system'].keys():
         hdict['generic/energy_pot'] = h5['system/energy'][()]/electronvolt
     if 'trajectory' in h5.keys() and 'pos' in h5['trajectory'].keys():
@@ -691,6 +692,7 @@ class Yaff(AtomisticGenericJob):
         with self.project_hdf5.open("output") as hdf5_output:
             for k, v in output_dict.items():
                 hdf5_output[k] = v
+            hdf5_output['generic/indices'] = np.vstack([self.structure.indices] * output_dict['generic/positions'].shape[0])
 
     def to_hdf(self, hdf=None, group_name=None):
         super(Yaff, self).to_hdf(hdf=hdf, group_name=group_name)
