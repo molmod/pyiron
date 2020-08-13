@@ -196,7 +196,7 @@ class SxExtOpt(InteractiveInterface):
             self._interactive_library_read.close()
             self._delete_named_pipes(working_directory=self.working_directory)
 
-    @staticmethod 
+    @staticmethod
     def _delete_named_pipes(working_directory):
         for file in ["control", "response"]:
             file_path = posixpath.join(working_directory, file)
