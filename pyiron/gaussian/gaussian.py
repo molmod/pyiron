@@ -448,6 +448,8 @@ def fchk2dict(fchk):
     fchkdict['structure/dft/n_alpha_electrons']   = fchk.fields.get('Number of alpha electrons')
     fchkdict['structure/dft/n_beta_electrons']    = fchk.fields.get('Number of beta electrons')
     fchkdict['structure/dft/n_basis_functions']   = fchk.fields.get('Number of basis functions')
+    fchkdict['generic/indices']       = np.array([sorted(list(set(fchkdict['structure/numbers']))).index(number) for number in fchkdict['structure/numbers']])
+
 
     # Orbital information
     fchkdict['structure/dft/alpha_orbital_e']     = fchk.fields.get('Alpha Orbital Energies')
