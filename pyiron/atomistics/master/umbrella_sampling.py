@@ -141,16 +141,17 @@ class US(AtomisticParallelMaster):
             tol     if no free energy value changes between iteration for more than tol, wham is converged
         '''
 
+        mdl_load = 'module load WHAM/2.0.9.1-intel-2019a-kj_mol;'
 
         if isinstance(h_min,(int,float)):
-            cmd = os.path.join(self.project.root_path,'wham')
+            cmd = 'wham'
             cmd += ' '
             if not periodicity is None:
                 cmd += 'P{} '.format(periodicity)
             cmd += ' '.join(map(str,[h_min,h_max,int(bins),tol,self.input['temp'],0,f_metadata,f_fes]))
 
         elif isinstance(h_min,list) and len(h_min) == 2:
-            cmd =  os.path.join(self.project.root_path,'wham-2d')
+            cmd =  'wham-2d'
             cmd += ' '
             periodic = ['Px='+str(periodicity[0]) if not periodicity[0] is None else '0', 'Py='+str(periodicity[1]) if not periodicity[1] is None else '0']
             for i in range(2):
@@ -160,7 +161,7 @@ class US(AtomisticParallelMaster):
             raise NotImplementedError()
 
         subprocess.check_output(
-            cmd,
+            mdl_load+cmd,
             stderr=subprocess.STDOUT,
             universal_newlines=True,
             shell=True
