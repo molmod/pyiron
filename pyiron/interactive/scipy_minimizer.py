@@ -62,10 +62,10 @@ class ScipyMinimizer(InteractiveWrapper):
     def run_static(self):
         self.ref_job_initialize()
         self._logger.debug("cg status: " + str(self.status))
-        self._run_again = True
+        self._delete_existing_job = True
         if self.ref_job.server.run_mode.interactive:
-            self._run_again = False
-        self.ref_job.run(run_again=self._run_again)
+            self._delete_existing_job = False
+        self.ref_job.run(delete_existing_job=self._delete_existing_job)
         self.status.running = True
         if self.input["minimizer"] == "CG":
             output = optimize.fmin_cg(
@@ -73,7 +73,7 @@ class ScipyMinimizer(InteractiveWrapper):
                 x0=self.ref_job.structure.positions.flatten(),
                 fprime=self._update_forces,
                 maxiter=self.input["ionic_steps"],
-                gtol=self.input["ionic_forces"],
+                gtol=self.input["ionic_force_tolerance"],
                 disp=False,
                 full_output=True,
             )
@@ -84,7 +84,7 @@ class ScipyMinimizer(InteractiveWrapper):
                 x0=self.ref_job.structure.positions.flatten(),
                 fprime=self._update_forces,
                 maxiter=self.input["ionic_steps"],
-                gtol=self.input["ionic_forces"],
+                gtol=self.input["ionic_force_tolerance"],
                 disp=False,
                 full_output=True,
             )
@@ -95,7 +95,7 @@ class ScipyMinimizer(InteractiveWrapper):
                 f=self._update_energy,
                 x0=self.ref_job.structure.positions.flatten(),
                 maxiter=self.input["ionic_steps"],
-                gtol=self.input["ionic_forces"],
+                gtol=self.input["ionic_force_tolerance"],
                 disp=False,
                 full_output=True,
             )
@@ -110,7 +110,7 @@ class ScipyMinimizer(InteractiveWrapper):
         self._logger.debug("cg ref_job status: " + str(self.ref_job.status))
         if not np.equal(x, self.ref_job.structure.positions).all():
             self.ref_job.structure.positions = x
-            self.ref_job.run(run_again=self._run_again)
+            self.ref_job.run(delete_existing_job=self._delete_existing_job)
         f = self.ref_job.output.forces[-1].flatten()
         self._logger.debug("cg ref_job status after: " + str(self.ref_job.status))
         return -f
@@ -120,7 +120,7 @@ class ScipyMinimizer(InteractiveWrapper):
         self._logger.debug("cg ref_job status: " + str(self.ref_job.status))
         if not np.equal(x, self.ref_job.structure.positions).all():
             self.ref_job.structure.positions = x
-            self.ref_job.run(run_again=self._run_again)
+            self.ref_job.run(delete_existing_job=self._delete_existing_job)
         E = self.ref_job.output.energy_pot[-1]
         self._logger.debug("cg ref_job status after: " + str(self.ref_job.status))
         return E
@@ -156,7 +156,7 @@ class Input(GenericParameters):
         Loads the default file content
         """
         file_content = (
-            "minimizer = CG\n" "ionic_steps = 1000\n" "ionic_forces = 1.0e-8\n"
+            "minimizer = CG\n" "ionic_steps = 1000\n" "ionic_force_tolerance = 1.0e-8\n"
         )
         self.load_string(file_content)
 
