@@ -24,4 +24,3 @@ hooks.append(thermo)
 hooks.append(VerletScreenLog(step=1000))
 md = VerletIntegrator(ff, 1.0*femtosecond, hooks=hooks)
 md.run(1000)
-

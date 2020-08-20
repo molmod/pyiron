@@ -315,7 +315,7 @@ def hdf2dict(h5):
         if 'econs' in h5['trajectory'].keys():
             hdict['generic/energy_cons'] = h5['trajectory/econs'][:]/electronvolt
         if 'press' in h5['trajectory'].keys():
-            hdict['generic/pressure'] = h5['trajectory/press'][:]
+            hdict['generic/pressure'] = h5['trajectory/press'][:]/(1e9*pascal)
         if 'gradient' in h5['trajectory'].keys():
             hdict['generic/forces'] = -h5['trajectory/gradient'][:]/(electronvolt/angstrom)
     if 'hessian' in h5['system'].keys():

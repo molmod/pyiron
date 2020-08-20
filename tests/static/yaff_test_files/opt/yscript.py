@@ -20,4 +20,3 @@ dof = CartesianDOF(ff, gpos_rms=1e-08, dpos_rms=1e-06)
 opt = CGOptimizer(dof, hooks=[hdf5])
 opt.run(1000)
 system.to_file('opt.chk')
-

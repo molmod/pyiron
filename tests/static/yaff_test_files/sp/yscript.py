@@ -20,4 +20,3 @@ hooks = [hdf5, restart]
 energy = ff.compute()
 system.to_hdf5(f)
 f['system/energy'] = energy
-

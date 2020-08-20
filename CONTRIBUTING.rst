@@ -48,7 +48,7 @@ Table of Contents
   * `Issue and pull request labels`_
   * `Build status`_
   * `pyiron releases`_
-  
+
 `Debugging`_
   * `My job does not run on the queue`_
 
@@ -140,7 +140,7 @@ To get the developmental (git) version of pyiron,
 
 **Local Testing**
 
-The full test suite is always run automatically when you open a new pull request.  Still it 
+The full test suite is always run automatically when you open a new pull request.  Still it
 sometimes nice to run all or only specific tests on your machine.  To do that run from the repo root, e.g.
 
 .. code-block::
@@ -150,14 +150,14 @@ sometimes nice to run all or only specific tests on your machine.  To do that ru
   python -m unittest tests/sphinx/test_base.py
 
 Where the first line runs all tests, the second all the sphinx tests and the final line only the tests in that file.
-Keep in mind that to run the tests your repository needs to be inside your pyiron project folder and you need to have 
-at least the basic resources installed from ``tests/static``.  A neat trick when testing/debugging is to combine the 
+Keep in mind that to run the tests your repository needs to be inside your pyiron project folder and you need to have
+at least the basic resources installed from ``tests/static``.  A neat trick when testing/debugging is to combine the
 pdb and unittest modules like this
 
 .. code-block::
 
   python -m pdb -m unittest ...
-  
+
 This allows you to re-use the sometimes complicated setups for your interactive debugging that might be otherwise
 difficult to replicate in a REPL.
 
@@ -383,7 +383,7 @@ This should output:
    ...
    'ProtoMD']
 
-If you see your job class in the list, proceed to step 3. If not, 
+If you see your job class in the list, proceed to step 3. If not,
 
 
 **2. Check if the job class in initialized in ``__init__.py`` of the module**
@@ -397,8 +397,8 @@ Make sure that the ``__init__.py`` of your module (here, ``pyiron_contrib``) ini
 
   # Make classes available for new pyiron version
   JOB_CLASS_DICT['ProtoMD'] = 'pyiron_contrib.protocol.compound.md'  # the path of your job class
-  
-  
+
+
 **3. Confirm that the job class can be instantiatied**
 
 Create a new job, but instead of running it, save it:
