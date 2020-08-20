@@ -30,9 +30,11 @@ s = Settings()
 def queue_table(job_ids=[], project_only=True, full_table=False):
     """
     Display the queuing system table as pandas.Dataframe
+
     Args:
         job_ids (list): check for a specific list of job IDs - empty list by default
         project_only (bool): Query only for jobs within the current project - True by default
+
     Returns:
         pandas.DataFrame: Output from the queuing system - optimized for the Sun grid engine
     """
@@ -65,8 +67,10 @@ def queue_table(job_ids=[], project_only=True, full_table=False):
 def queue_check_job_is_waiting_or_running(item):
     """
     Check if a job is still listed in the queue system as either waiting or running.
+
     Args:
         item (int, GenericJob): Provide either the job_ID or the full hamiltonian
+
     Returns:
         bool: [True/False]
     """
@@ -84,8 +88,10 @@ def queue_info_by_job_id(job_id):
     """
     Display the queuing system info of job by qstat | grep  shell command
     as dictionary
+
     Args:
         requested_id (int): query for a specific job_id
+
     Returns:
         dict: Dictionary with the output from the queuing system - optimized for the Sun grid engine
     """
@@ -98,6 +104,7 @@ def queue_info_by_job_id(job_id):
 def queue_is_empty():
     """
     Check if the queue table is currently empty - no more jobs to wait for.
+
     Returns:
         bool: True if the table is empty, else False - optimized for the Sun grid engine
     """
@@ -110,8 +117,10 @@ def queue_is_empty():
 def queue_delete_job(item):
     """
     Delete a job from the queuing system
+
     Args:
         item (int, pyiron.base.job.generic.GenericJob): Provide either the job_ID or the full hamiltonian
+
     Returns:
         str: Output from the queuing system as string - optimized for the Sun grid engine
     """
@@ -122,28 +131,30 @@ def queue_delete_job(item):
         return None
 
 
-def queue_enable_reservation(item,reservation_id):
+def queue_enable_reservation(item):
     """
     Enable a reservation for a particular job within the queuing system
+
     Args:
         item (int, pyiron.base.job.generic.GenericJob): Provide either the job_ID or the full hamiltonian
+
     Returns:
         str: Output from the queuing system as string - optimized for the Sun grid engine
     """
     que_id = _validate_que_request(item)
     if s.queue_adapter is not None:
         if isinstance(que_id, list):
-            return [s.queue_adapter.enable_reservation(process_id=q,reservation_id=reservation_id) for q in que_id]
+            return [s.queue_adapter.enable_reservation(process_id=q) for q in que_id]
         else:
-            return s.queue_adapter.enable_reservation(process_id=que_id,reservation_id=reservation_id)
+            return s.queue_adapter.enable_reservation(process_id=que_id)
     else:
         return None
-
 
 
 def wait_for_job(job, interval_in_s=5, max_iterations=100):
     """
     Sleep until the job is finished but maximum interval_in_s * max_iterations seconds.
+
     Args:
         job (pyiron.base.job.generic.GenericJob): Job to wait for
         interval_in_s (int): interval when the job status is queried from the database - default 5 sec.
@@ -184,8 +195,10 @@ def wait_for_job(job, interval_in_s=5, max_iterations=100):
 def _validate_que_request(item):
     """
     Internal function to convert the job_ID or hamiltonian to the queuing system ID.
+
     Args:
         item (int, pyiron.base.job.generic.GenericJob): Provide either the job_ID or the full hamiltonian
+
     Returns:
         int: queuing system ID
     """

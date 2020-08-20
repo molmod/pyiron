@@ -94,49 +94,6 @@ def _write_config_file(
         if not os.path.exists(project_path):
             os.makedirs(project_path)
 
-def _write_environ_var(config_file_name='~/.pyiron'):
-    config_file = os.path.normpath(os.path.abspath(os.path.expanduser(config_file_name)))
-
-    # Check whether bashrc already contains PYIRONCONFIG, this can happen in bashrc has not been sourced yet
-    with open(os.path.expanduser("~/.bashrc"), "r") as outfile:
-        lines = outfile.readlines()
-    if not any(['PYIRONCONFIG' in line for line in lines]):
-        # Write to bashrc
-        with open(os.path.expanduser("~/.bashrc"), "a") as outfile:
-            if not lines[-1]=='\n': outfile.write('\n')
-            outfile.write("# PYIRONCONFIG for pyiron config file location\n")
-            outfile.write("export PYIRONCONFIG={}\n".format(config_file))
-        print('Please source the .bashrc after the initial configuration or reset your terminal.')
-        print('')
-        print('$ source ~/.bashrc')
-    else:
-        raise SystemError('Your .bashrc has the correct environment variable but has not been sourced. Please execute the following in your bash shell: source ~/.bashrc')
-
-def _write_full_environ_var(env_loc=None,location='~/'):
-    if env_loc is None:
-        full_path = os.path.normpath(os.path.abspath(os.path.expanduser(location)))
-        download_path = full_path
-    else:
-        full_path = '$' + env_loc + '/' + location # this should be correctly expanded by the shell
-        download_path = os.environ[env_loc]+'/'+location
-
-    # Check whether bashrc already contains PYIRON variables, this can happen if bashrc has not been sourced yet
-    with open(os.path.expanduser("~/.bashrc"), "r") as outfile:
-        lines = outfile.readlines()
-    if not any(['PYIRON' in line for line in lines]):
-        # Write to bashrc
-        with open(os.path.expanduser("~/.bashrc"), "a") as outfile:
-            if not lines[-1]=='\n': outfile.write('\n')
-            outfile.write("# PYIRON env variables for pyiron file locations\n")
-            outfile.write("export PYIRONRESOURCEPATHS={}\n".format(full_path + 'pyiron/resources'))
-            outfile.write("export PYIRONPROJECTPATHS={}\n".format(full_path + 'pyiron/projects'))
-        print('Please source the .bashrc after the initial configuration or reset your terminal.')
-        print('')
-        print('$ source ~/.bashrc')
-    else:
-        raise SystemError('Your .bashrc already has pyiron environment variables but has not been sourced. Please execute the following in your bash shell if you are certain these are defined correctly: source ~/.bashrc')
-
-    return download_path
 
 def install_dialog():
     user_input = None
@@ -144,32 +101,24 @@ def install_dialog():
         config_file = os.environ["PYIRONCONFIG"]
     else:
         config_file = "~/.pyiron"
-
-    while user_input not in ['yes', 'no']:
-        user_input = input('It appears that pyiron is not yet configured, do you want to create a default start configuration (recommended: yes). [yes/no]: ')
-    if user_input.lower() == 'yes' or user_input.lower() == 'y':
-        install_pyiron(config_file_name=config_file,
-                       zip_file="resources.zip",
-                       resource_directory="~/pyiron/resources",
-                       giturl_for_zip_file="https://github.com/pyiron/pyiron-resources/archive/master.zip",
-                       git_folder_name="pyiron-resources-master")
-    else:
-        user_input = None #reset input
-        while user_input not in ['yes', 'no']:
-            user_input = input('Do you want to provide an alternative configuration (recommended: yes). [yes/no]: ')
-        if user_input.lower() == 'yes' or user_input.lower() == 'y':
-            env_loc = input("Environment variable that acts as parent directory (DEFAULT = 'VSC_SCRATCH_KYUKON'): ")
-            location = input("Location for pyiron folder, within this parent directory (DEFAULT = 'nanoscale'): ")
-            if env_loc=='': env_loc='VSC_SCRATCH_KYUKON'
-            if location=='': location='nanoscale/'
-            if not location[-1]=='/': location+='/'
-            install_pyiron_env(env_loc=env_loc,
-                               location=location,
-                               zip_file="resources.zip",
-                               giturl_for_zip_file="https://github.com/SanderBorgmans/pyiron-resources/archive/hpc_ugent.zip",
-                               git_folder_name="pyiron-resources-hpc_ugent")
+    if not os.path.exists(os.path.expanduser(config_file)):
+        while user_input not in ["yes", "no"]:
+            user_input = input(
+                "It appears that pyiron is not yet configured, do you want to create a default start configuration (recommended: yes). [yes/no]:"
+            )
+        if user_input.lower() == "yes" or user_input.lower() == "y":
+            install_pyiron(
+                config_file_name="~/.pyiron",
+                zip_file="resources.zip",
+                resource_directory="~/pyiron/resources",
+                giturl_for_zip_file="https://github.com/pyiron/pyiron-resources/archive/master.zip",
+                git_folder_name="pyiron-resources-master",
+            )
         else:
-            raise ValueError('pyiron was not installed!')
+            raise ValueError("pyiron was not installed!")
+    else:
+        print("pyiron is already installed.")
+
 
 def install_pyiron(
     config_file_name="~/.pyiron",
@@ -195,37 +144,9 @@ def install_pyiron(
         project_path=project_path,
         resource_path=resource_directory,
     )
-    _write_environ_var(
-        config_file_name=config_file_name
-    )
     _download_resources(
         zip_file=zip_file,
         resource_directory=resource_directory,
         giturl_for_zip_file=giturl_for_zip_file,
         git_folder_name=git_folder_name,
-    )
-
-def install_pyiron_env(env_loc=None,
-                       location='~/',
-                       zip_file="resources.zip",
-                       giturl_for_zip_file="https://github.com/pyiron/pyiron-resources/archive/master.zip",
-                       git_folder_name="pyiron-resources-master"):
-    """
-    Function to configure the pyiron installation using only environment variables.
-    It is important that env_loc is defined such that all locations remain consistent over nodes/clusters if the exact path is variable
-
-    Args:
-        env_loc (str): name of the environment variable that acts as parent directory
-        location (str): name of the directory that will contain the pyiron folders
-        zip_file (str): name of the compressed file
-        giturl_for_zip_file (str): url for the zipped resources file on github
-        git_folder_name (str): name of the extracted folder
-    """
-    # Build directories if install_pyiron has been skipped for custom pyiron config file
-    download_path = _write_full_environ_var(env_loc=env_loc,location=location)
-    _download_resources(
-        zip_file=zip_file,
-        resource_directory=download_path+'pyiron/resources',
-        giturl_for_zip_file=giturl_for_zip_file,
-        git_folder_name=git_folder_name
     )

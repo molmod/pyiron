@@ -160,6 +160,15 @@ class LammpsBase(AtomisticGenericJob):
             potential = potential_filename
         else:
             raise TypeError("Potentials have to be strings or pandas dataframes.")
+        if self.structure:
+            structure_elements = self.structure.get_species_symbols()
+            potential_elements = list(potential["Species"])[0]
+            if not set(structure_elements).issubset(potential_elements):
+                raise ValueError("Potential {} does not support elements "
+                                 "in structure {}.".format(
+                                     potential_elements,
+                                     structure_elements
+                                ))
         self.input.potential.df = potential
         for val in ["units", "atom_style", "dimension"]:
             v = self.input.potential[val]
@@ -212,15 +221,20 @@ class LammpsBase(AtomisticGenericJob):
 
     def validate_ready_to_run(self):
         """
-
-        Returns:
-
+        Validating input parameters before LAMMPS run
         """
         super(LammpsBase, self).validate_ready_to_run()
         if self.potential is None:
             raise ValueError(
                 "This job does not contain a valid potential: {}".format(self.job_name)
             )
+        scaled_positions = self.structure.get_scaled_positions(wrap=False)
+        # Check if atoms located outside of non periodic box
+        conditions = [(np.min(scaled_positions[:, i]) < 0.0 or
+                       np.max(scaled_positions[:, i]) > 1.0) and not self.structure.pbc[i] for i in range(3)]
+        if any(conditions):
+            raise ValueError("You have atoms located outside the non-periodic boundaries "
+                             "of the defined simulation box")
 
     def get_potentials_for_structure(self):
         """
@@ -425,7 +439,7 @@ class LammpsBase(AtomisticGenericJob):
             positions = [
                 pos_i.tolist() for pos_i in h5md["/particles/all/position/value"]
             ]
-            time = [time_i.tolist() for time_i in h5md["/particles/all/position/step"]]
+            steps = [steps_i.tolist() for steps_i in h5md["/particles/all/position/step"]]
             forces = [for_i.tolist() for for_i in h5md["/particles/all/force/value"]]
             # following the explanation at: http://nongnu.org/h5md/h5md.html
             cell = [
@@ -436,7 +450,7 @@ class LammpsBase(AtomisticGenericJob):
         with self.project_hdf5.open("output/generic") as h5_file:
             h5_file["forces"] = np.array(forces)
             h5_file["positions"] = np.array(positions)
-            h5_file["time"] = np.array(time)
+            h5_file["steps"] = np.array(steps)
             h5_file["cells"] = cell
             h5_file["indices"] = self.remap_indices(indices)
 
@@ -573,8 +587,10 @@ class LammpsBase(AtomisticGenericJob):
 
     def calc_minimize(
             self,
-            e_tol=0.0,
-            f_tol=1e-4,
+            ionic_energy_tolerance=0.0,
+            ionic_force_tolerance=1e-4,
+            e_tol=None,
+            f_tol=None,
             max_iter=1000000,
             pressure=None,
             n_print=100,
@@ -582,7 +598,13 @@ class LammpsBase(AtomisticGenericJob):
     ):
         rotation_matrix = self._get_rotation_matrix(pressure=pressure)
         # Docstring set programmatically -- Ensure that changes to signature or defaults stay consistent!
+        if e_tol is not None:
+            ionic_energy_tolerance = e_tol
+        if f_tol is not None:
+            ionic_force_tolerance = f_tol
         super(LammpsBase, self).calc_minimize(
+            ionic_energy_tolerance=ionic_energy_tolerance,
+            ionic_force_tolerance=ionic_force_tolerance,
             e_tol=e_tol,
             f_tol=f_tol,
             max_iter=max_iter,
@@ -590,8 +612,8 @@ class LammpsBase(AtomisticGenericJob):
             n_print=n_print,
         )
         self.input.control.calc_minimize(
-            e_tol=e_tol,
-            f_tol=f_tol,
+            ionic_energy_tolerance=ionic_energy_tolerance,
+            ionic_force_tolerance=ionic_force_tolerance,
             max_iter=max_iter,
             pressure=pressure,
             n_print=n_print,
@@ -838,7 +860,7 @@ class LammpsBase(AtomisticGenericJob):
         with open(file_name, "r") as ff:
             dump = ff.readlines()
 
-        time = np.genfromtxt(
+        steps = np.genfromtxt(
             [
                 dump[nn]
                 for nn in np.where([ll.startswith("ITEM: TIMESTEP") for ll in dump])[0]
@@ -846,8 +868,8 @@ class LammpsBase(AtomisticGenericJob):
             ],
             dtype=int,
         )
-        time = np.array([time]).flatten()
-        output["time"] = time
+        steps = np.array([steps]).flatten()
+        output["steps"] = steps
 
         natoms = np.genfromtxt(
             [

@@ -61,7 +61,6 @@ class Gaussian(GenericDFTJob):
         with self.project_hdf5.open("output") as hdf5_output:
             for k, v in output_dict.items():
                 hdf5_output[k] = v
-            hdf5_output['generic/indices'] = np.vstack([self.structure.indices] * output_dict['generic/positions'].shape[0])
 
 
     def to_hdf(self, hdf=None, group_name=None):
@@ -125,7 +124,7 @@ class Gaussian(GenericDFTJob):
             electronic_steps=electronic_steps,
             ionic_steps=ionic_steps,
             algorithm=algorithm,
-            ionic_forces=ionic_forces
+            ionic_force_tolerance=ionic_forces
         )
 
 
@@ -303,9 +302,7 @@ class Gaussian(GenericDFTJob):
         freq_array[nma_zeros:] = np.array(freqs)
         freqs = freq_array * (lightspeed/centimeter) # put into atomic units
         ints = np.array(ints)
-
-        modes = np.array(modes).reshape(nrat,len(ints),3)
-        modes = np.swapaxes(modes,0,1)
+        modes = np.array(modes).reshape(len(ints),nrat,3)
 
         return freqs,ints,modes
 
@@ -450,8 +447,6 @@ def fchk2dict(fchk):
     fchkdict['structure/dft/n_alpha_electrons']   = fchk.fields.get('Number of alpha electrons')
     fchkdict['structure/dft/n_beta_electrons']    = fchk.fields.get('Number of beta electrons')
     fchkdict['structure/dft/n_basis_functions']   = fchk.fields.get('Number of basis functions')
-    fchkdict['generic/indices']       = np.array([sorted(list(set(fchkdict['structure/numbers']))).index(number) for number in fchkdict['structure/numbers']])
-
 
     # Orbital information
     fchkdict['structure/dft/alpha_orbital_e']     = fchk.fields.get('Alpha Orbital Energies')

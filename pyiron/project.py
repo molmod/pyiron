@@ -23,10 +23,6 @@ import pyiron.atomistics.structure.pyironase as ase
 from pyiron.atomistics.structure.atoms import Atoms
 from pyiron.atomistics.structure.generator import create_surface, create_ase_bulk, create_structure
 from pyiron.atomistics.master.parallel import pipe
-from pyiron.atomistics.nma.nma import NMA
-from pyiron.atomistics.md_analysis.rdf import RDF
-
-from molmod.units import *
 
 
 __author__ = "Joerg Neugebauer, Jan Janssen"
@@ -55,6 +51,9 @@ class Project(ProjectCore):
                                      current working directory) path
         user (str): current pyiron user
         sql_query (str): SQL query to only select a subset of the existing jobs within the current project
+        default_working_directory (bool): Access default working directory, for ScriptJobs this equals the project
+                                     directory of the ScriptJob for regular projects it falls back to the current
+                                     directory.
 
     Attributes:
 
@@ -105,15 +104,20 @@ class Project(ProjectCore):
                                              ‘ConvergenceEncutParallel’, ‘ConvergenceKpointParallel’, ’PhonopyMaster’,
                                              ‘DefectFormationEnergy’, ‘LammpsASE’, ‘PipelineMaster’,
                                              ’TransformationPath’, ‘ThermoIntEamQh’, ‘ThermoIntDftEam’, ‘ScriptJob’,
-                                             ‘ListMaster’, ‘Gaussian’, ‘Yaff’, ‘US’]
+                                             ‘ListMaster']
     """
 
-    def __init__(self, path="", user=None, sql_query=None):
-        super(Project, self).__init__(path=path, user=user, sql_query=sql_query)
+    def __init__(self, path="", user=None, sql_query=None, default_working_directory=False):
+        super(Project, self).__init__(
+            path=path, 
+            user=user, 
+            sql_query=sql_query, 
+            default_working_directory=default_working_directory
+        )
         self.job_type = JobTypeChoice()
         self.object_type = ObjectTypeChoice()
 
-    def create_job(self, job_type, job_name):
+    def create_job(self, job_type, job_name, delete_existing_job=False):
         """
         Create one of the following jobs:
         - 'StructureContainer’:
@@ -146,10 +150,7 @@ class Project(ProjectCore):
         - ‘ThermoIntEamQh’:
         - ‘ThermoIntDftEam’:
         - ‘ScriptJob’: Python script or jupyter notebook job container
-        - ‘ListMaster’: list of jobs
-        - ‘Gaussian’:
-        - ‘Yaff’:
-        - ‘US’:
+        - ‘ListMaster': list of jobs
 
         Args:
             job_type (str): job type can be ['StructureContainer’, ‘StructurePipeline’, ‘AtomisticExampleJob’,
@@ -160,7 +161,7 @@ class Project(ProjectCore):
                                              ‘ConvergenceEncutParallel’, ‘ConvergenceKpointParallel’, ’PhonopyMaster’,
                                              ‘DefectFormationEnergy’, ‘LammpsASE’, ‘PipelineMaster’,
                                              ’TransformationPath’, ‘ThermoIntEamQh’, ‘ThermoIntDftEam’, ‘ScriptJob’,
-                                             ‘ListMaster’, ‘Gaussian’, ‘Yaff’, ‘US’]
+                                             ‘ListMaster']
             job_name (str): name of the job
 
         Returns:
@@ -171,6 +172,7 @@ class Project(ProjectCore):
             project=ProjectHDFio(project=self.copy(), file_name=job_name),
             job_name=job_name,
             job_class_dict=self.job_type.job_class_dict,
+            delete_existing_job=delete_existing_job,
         )
         if self.user is not None:
             job.user = self.user
@@ -562,6 +564,8 @@ class Project(ProjectCore):
             pyiron.atomistics.structure.atoms.Atoms: The required structure instance
 
         """
+        if pbc is None:
+            pbc = True
         return Atoms(
             symbols=symbols,
             positions=positions,
@@ -671,30 +675,6 @@ class Project(ProjectCore):
                 parent_element=parent_element, new_element=new_element_name
             )
         return periodic_table.element(new_element_name)
-
-    @staticmethod
-    def apply_nma(job):
-        """
-
-        Args:
-            job : The job object used to do a normal mode analysis, requires a gradient and hessian in the output
-        Returns:
-            atomistics.nma.nma.NMA instance
-        """
-        return NMA(job)
-
-    @staticmethod
-    def calc_RDF(job,atom_1,atom_2,rcut=20*angstrom,rspacing=0.01*angstrom,nimage=1,start=0,stop=-1,nf=0,save=False,atomic_units=False):
-        """
-
-        Args:
-            job : The job object used to calculate the RDF, requires a trajectory of cells and positions
-            atom_1, atom_2: atoms for which to construct an RDF
-            other parameters are explained in RDF class
-        Returns:
-            atomistics.md_analysis.rdf.RDF instance
-        """
-        return RDF(job,atom_1,atom_2,rcut,rspacing,nimage,start,stop,nf,save,atomic_units)
 
     # Graphical user interfaces
     def gui(self):

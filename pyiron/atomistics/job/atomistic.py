@@ -185,20 +185,30 @@ class AtomisticGenericJob(GenericJobCore):
         return new_generic_job
 
     def calc_minimize(
-        self, e_tol=0, f_tol=1e-4, max_iter=1000, pressure=None, n_print=1
+        self, ionic_energy_tolerance=0, ionic_force_tolerance=1e-4, e_tol=None, f_tol=None, max_iter=1000, pressure=None, n_print=1
     ):
         """
 
         Args:
-            e_tol:
-            f_tol:
-            max_iter:
-            pressure:
-            n_print:
+            ionic_energy_tolerance (float): Maximum energy difference between 2 steps
+            ionic_force_tolerance (float): Maximum force magnitude that each of atoms is allowed to have
+            e_tol (float): same as ionic_energy_tolerance (deprecated)
+            f_tol (float): same as ionic_force_tolerance (deprecated)
+            max_iter (int): Maximum number of force evluations
+            pressure (float/list): Targetpressure values
+            n_print (int): Print period
 
         Returns:
 
         """
+        if e_tol is not None:
+            warnings.warn(
+                "e_tol is deprecated as of vers. 0.3.0. It is not guaranteed to be in service in vers. 0.4.0"
+            )
+        if f_tol is not None:
+            warnings.warn(
+                "f_tol is deprecated as of vers. 0.3.0. It is not guaranteed to be in service in vers. 0.4.0"
+            )
         self._generic_input["calc_mode"] = "minimize"
         self._generic_input["max_iter"] = max_iter
         self._generic_input["pressure"] = pressure
@@ -602,52 +612,6 @@ class AtomisticGenericJob(GenericJobCore):
         )
         return self.get_structure(iteration_step=-1)
 
-    def set_kpoints(
-        self,
-        mesh=None,
-        scheme="MP",
-        center_shift=None,
-        symmetry_reduction=True,
-        manual_kpoints=None,
-        weights=None,
-        reciprocal=True,
-    ):
-        """
-
-        Args:
-            mesh:
-            scheme:
-            center_shift:
-            symmetry_reduction:
-            manual_kpoints:
-            weights:
-            reciprocal:
-
-        Returns:
-
-        """
-        raise NotImplementedError(
-            "The set_kpoints function is not implemented for this code."
-        )
-
-    def set_encut(self, encut):
-        """
-
-        Args:
-            encut:
-
-        Returns:
-
-        """
-        raise NotImplementedError(
-            "The set_encut function is not implemented for this code."
-        )
-
-    def get_encut(self):
-        raise NotImplementedError(
-            "The set_encut function is not implemented for this code."
-        )
-
     def get_structure(self, iteration_step=-1, wrap_atoms=True):
         """
         Gets the structure from a given iteration step of the simulation (MD/ionic relaxation). For static calculations
@@ -668,12 +632,14 @@ class AtomisticGenericJob(GenericJobCore):
                 conditions.append(True)
             else:
                 conditions.append(self.output.cells[0] is None)
-        conditions.append(self.output.cells is None)
+        if self.output.positions is not None and self.output.cells is None:
+            conditions.append(self.output.cells is None)
         if any(conditions):
             snapshot.cell = None
-        else:
+        elif self.output.cells is not None:
             snapshot.cell = self.output.cells[iteration_step]
-        snapshot.positions = self.output.positions[iteration_step]
+        if self.output.positions is not None:
+            snapshot.positions = self.output.positions[iteration_step]
         indices = self.output.indices
         if indices is not None and len(indices) > max([iteration_step, 0]):
             snapshot.indices = indices[iteration_step]
@@ -729,16 +695,6 @@ class AtomisticGenericJob(GenericJobCore):
             ham.to_hdf()
 
 
-def set_encut(job, parameter):
-    job.set_encut(parameter)
-    return job
-
-
-def set_kpoints(job, parameter):
-    job.set_kpoints(parameter)
-    return job
-
-
 def set_structure(job, parameter):
     job.structure = parameter
     return job
@@ -747,8 +703,6 @@ def set_structure(job, parameter):
 class MapFunctions(object):
     def __init__(self):
         self.set_structure = set_structure
-        self.set_encut = set_encut
-        self.set_kpoints = set_kpoints
 
 
 class Trajectory(object):

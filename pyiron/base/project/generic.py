@@ -70,6 +70,9 @@ class Project(ProjectPath):
                                      current working directory) path
         user (str): current pyiron user
         sql_query (str): SQL query to only select a subset of the existing jobs within the current project
+        default_working_directory (bool): Access default working directory, for ScriptJobs this equals the project
+                                    directory of the ScriptJob for regular projects it falls back to the current
+                                    directory.
 
     Attributes:
 
@@ -121,7 +124,14 @@ class Project(ProjectPath):
 
     """
 
-    def __init__(self, path="", user=None, sql_query=None):
+    def __init__(self, path="", user=None, sql_query=None, default_working_directory=False):
+        if default_working_directory and path=="":
+            inputdict = Notebook.get_custom_dict()
+            if inputdict is not None and "project_dir" in inputdict.keys():
+                path = inputdict["project_dir"]
+            else:
+                path = "."
+
         super(Project, self).__init__(path=path)
 
         self.user = user
@@ -253,7 +263,7 @@ class Project(ProjectPath):
         new = self.copy()
         return new.open(group, history=False)
 
-    def create_job(self, job_type, job_name):
+    def create_job(self, job_type, job_name, delete_existing_job=False):
         """
         Create one of the following jobs:
         - 'ExampleJob': example job just generating random number
@@ -275,6 +285,7 @@ class Project(ProjectPath):
             project=ProjectHDFio(project=self.copy(), file_name=job_name),
             job_name=job_name,
             job_class_dict=self.job_type.job_class_dict,
+            delete_existing_job=delete_existing_job,
         )
         if self.user is not None:
             job.user = self.user
@@ -412,15 +423,16 @@ class Project(ProjectPath):
         if not project:
             project = self.project_path
         if not isinstance(self.db, FileTable):
-            return get_job_status(
+            job_id = get_job_id(
                 database=self.db,
                 sql_query=self.sql_query,
                 user=self.user,
                 project_path=project,
-                job_specifier=job_specifier,
+                job_specifier=job_specifier
             )
         else:
-            return self.db.get_job_status(job_specifier=job_specifier, project=project)
+            job_id = self.db.get_job_id(job_specifier=job_specifier, project=project)
+        return self.db.get_job_status(job_id=job_id)
 
     def get_job_working_directory(self, job_specifier, project=None):
         """
@@ -436,15 +448,16 @@ class Project(ProjectPath):
         if not project:
             project = self.project_path
         if not isinstance(self.db, FileTable):
-            return get_job_working_directory(
+            job_id = get_job_id(
                 database=self.db,
                 sql_query=self.sql_query,
                 user=self.user,
                 project_path=project,
-                job_specifier=job_specifier,
+                job_specifier=job_specifier
             )
         else:
-            return self.db.get_job_working_directory(job_specifier=job_specifier, project=project)
+            job_id = self.db.get_job_id(job_specifier=job_specifier, project=project)
+        return self.db.get_job_working_directory(job_id=job_id)
 
     def get_project_size(self):
         """
@@ -604,6 +617,7 @@ class Project(ProjectPath):
                 job_name_contains=job_name_contains,
             )
         else:
+            self.db.update()
             return self.db.job_table(
                 project=self.project_path,
                 recursive=recursive,
@@ -636,14 +650,14 @@ class Project(ProjectPath):
     def get_external_input():
         """
         Get external input either from the HDF5 file of the ScriptJob object which executes the Jupyter notebook
-        or from an input.json file located in the same directory as the Jupyter notebook.
-
+        or from an input.json file located in the same directory as the Jupyter notebook. 
+        
         Returns:
             dict: Dictionary with external input
         """
         inputdict = Notebook.get_custom_dict()
         if inputdict is None:
-            raise ValueError("No input found, either there is an issue with your ScriptJob, " +
+            raise ValueError("No input found, either there is an issue with your ScriptJob, " + 
                              "or your input.json file is not located in the same directory " +
                              "as your Jupyter Notebook.")
         return inputdict
@@ -940,7 +954,7 @@ class Project(ProjectPath):
                 and self.db.get_item_by_id(job_id)["status"] in ["running", "submitted"]
             ):
                 if not self.queue_check_job_is_waiting_or_running(self.inspect(job_id)):
-                    self.db.item_update({"status": "aborted"}, job_id)
+                    self.db.set_job_status(job_id=job_id, status="aborted")
 
     def remove_file(self, file_name):
         """
@@ -1001,6 +1015,8 @@ class Project(ProjectPath):
         Args:
             recursive (bool): [True/False] delete all jobs in all subprojects - default=False
         """
+        if not isinstance(recursive, bool):
+            raise ValueError('recursive must be a boolean')
         if not self.view_mode:
             for job_id in self.get_job_ids(recursive=recursive):
                 if job_id not in self.get_job_ids(recursive=recursive):
@@ -1137,21 +1153,26 @@ class Project(ProjectPath):
             file_name (str): file name or file path for the local database
             cwd (str): directory where the local database is located
         """
-        if not isinstance(self.db, FileTable):
-            if cwd is None:
-                cwd = self.path
+        if cwd is None:
+            cwd = self.path
+        if not s.project_check_enabled:
             s.switch_to_local_database(file_name=file_name, cwd=cwd)
-            s.open_connection()
-            self.db = s.database
+            super(Project, self).__init__(path=self.path)
+        else:
+            s.switch_to_local_database(file_name=file_name, cwd=cwd)
+        self.db = s.database
 
     def switch_to_central_database(self):
         """
         Switch from local mode to central mode - if local_mode is enable pyiron is using a local database.
         """
-        if not isinstance(self.db, FileTable):
-            s.switch_to_central_database()
+        s.switch_to_central_database()
+        if not s.database_is_disabled:
             s.open_connection()
             self.db = s.database
+        else:
+            self.db = FileTable(project=self.path)
+            super(Project, self).__init__(path=self.path)
 
     def queue_delete_job(self, item):
         """
@@ -1195,7 +1216,7 @@ class Project(ProjectPath):
         return queue_is_empty()
 
     @staticmethod
-    def queue_enable_reservation(item,reservation_id):
+    def queue_enable_reservation(item):
         """
         Enable a reservation for a particular job within the queuing system
 
@@ -1205,7 +1226,7 @@ class Project(ProjectPath):
         Returns:
             str: Output from the queuing system as string - optimized for the Sun grid engine
         """
-        return queue_enable_reservation(item,reservation_id)
+        return queue_enable_reservation(item)
 
     @staticmethod
     def queue_check_job_is_waiting_or_running(item):
