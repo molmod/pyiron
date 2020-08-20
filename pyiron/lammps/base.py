@@ -592,8 +592,8 @@ class LammpsBase(AtomisticGenericJob):
             n_print=n_print,
         )
         self.input.control.calc_minimize(
-            e_tol=e_tol,
-            f_tol=f_tol,
+            ionic_energy_tolerance=ionic_energy_tolerance,
+            ionic_force_tolerance=ionic_force_tolerance,
             max_iter=max_iter,
             pressure=pressure,
             n_print=n_print,
