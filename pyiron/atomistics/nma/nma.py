@@ -21,14 +21,22 @@ class NMA(tamkin.NMA):
     """
     def __init__(self,job, atomic_units=False):
         self.job = job
+        if job['output/generic/energy_tot'] is None:
+            if job['output/generic/energy_pot'] is None:
+                raise ValueError('An NMA calculation requires an energy.')
+            else:
+                energy = job['output/generic/energy_pot'] # yaff hess jobs do not have energy_tot, but instead have energy_pot
+        else:
+            energy = job['output/generic/energy_tot']
+
         if not job['output/generic/hessian'] is None and not job['output/generic/forces'] is None:
             structure = job.get_structure(-1)
             if atomic_units:
                 mol = tamkin.Molecule(structure.get_atomic_numbers(),structure.get_positions(),np.array(structure.get_masses())*amu,
-                                  job['output/generic/energy_tot'],job['output/generic/forces']*-1 ,job['output/generic/hessian'])
+                                  energy,job['output/generic/forces']*-1 ,job['output/generic/hessian'])
             else:
                 mol = tamkin.Molecule(structure.get_atomic_numbers(),structure.get_positions()*angstrom,np.array(structure.get_masses())*amu,
-                                  job['output/generic/energy_tot']*electronvolt,job['output/generic/forces']*-1*electronvolt/angstrom ,job['output/generic/hessian']*electronvolt/angstrom**2)
+                                  energy*electronvolt,job['output/generic/forces']*-1*electronvolt/angstrom ,job['output/generic/hessian']*electronvolt/angstrom**2)
         else:
             raise ValueError('An NMA calculation requires a gradient and hessian.')
         super(NMA, self).__init__(mol)

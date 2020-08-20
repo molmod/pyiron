@@ -1070,35 +1070,10 @@ class GenericJob(JobCore):
             and not self.server.run_mode.modal
             and not self.server.run_mode.interactive
         ):
-            queue_flag = self.server.run_mode.queue
-            master_db_entry = project.db.get_item_by_id(master_id)
-            if master_db_entry["status"] == "suspended":
-                project.db.item_update({"status": "refresh"}, master_id)
-                self._logger.info("run_if_refresh() called")
-                # p = multiprocessing.Process(target=multiprocess_master, args=(master_id,
-                #                                                               self.project.path,
-                #                                                               self.server.run_mode.thread,
-                #                                                               False))
-                # del self
-                # p.start()
-                del self
-                master_inspect = project.inspect(master_id)
-                if master_inspect["server"]["run_mode"] == "non_modal" or (
-                    master_inspect["server"]["run_mode"] == "modal" and queue_flag
-                ):
-                    master = project.load(master_id)
-                    # master = master_inspect.load_object()
-                    master.run_if_refresh()
-                # if master.server.run_mode.non_modal or master.server.run_mode.queue:
-                #     master._run_if_refresh()
-                #     if master.server.run_mode.queue and master._process:
-                #         master._process.communicate()
-            elif master_db_entry["status"] == "refresh":
-                project.db.item_update({"status": "busy"}, master_id)
-                self._logger.info(
-                    "busy master: {} {}".format(master_id, self.get_job_id())
-                )
-                del self
+            self._reload_update_master(
+                project=project,
+                master_id=master_id
+            )
 
     def job_file_name(self, file_name, cwd=None):
         """
@@ -1388,7 +1363,7 @@ class GenericJob(JobCore):
         """
         if (
             self.server.run_mode.queue
-            and not self.project.queue_check_job_is_waiting_or_running(self.job_id)
+            and not self.project.queue_check_job_is_waiting_or_running(self)
         ):
             self.run(run_again=True)
         else:
@@ -1401,7 +1376,7 @@ class GenericJob(JobCore):
         """
         if (
             self.server.run_mode.queue
-            and not self.project.queue_check_job_is_waiting_or_running(self.job_id)
+            and not self.project.queue_check_job_is_waiting_or_running(self)
         ):
             self.run(run_again=True)
         elif self.server.run_mode.interactive:
@@ -1628,6 +1603,26 @@ class GenericJob(JobCore):
         Mainly used by the ListMaster job type.
         """
         pass
+
+    def _reload_update_master(self, project, master_id):
+        queue_flag = self.server.run_mode.queue
+        master_db_entry = project.db.get_item_by_id(master_id)
+        if master_db_entry["status"] == "suspended":
+            project.db.set_job_status(job_id=master_id, status="refresh")
+            self._logger.info("run_if_refresh() called")
+            del self
+            master_inspect = project.inspect(master_id)
+            if master_inspect["server"]["run_mode"] == "non_modal" or (
+                    master_inspect["server"]["run_mode"] == "modal" and queue_flag
+            ):
+                master = project.load(master_id)
+                master.run_if_refresh()
+        elif master_db_entry["status"] == "refresh":
+            project.db.set_job_status(job_id=master_id, status="busy")
+            self._logger.info(
+                "busy master: {} {}".format(master_id, self.get_job_id())
+            )
+            del self
 
 
 class GenericError(object):

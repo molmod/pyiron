@@ -813,3 +813,4 @@ class LammpsControl(GenericParameters):
                 self['thermo_style'] = (self['thermo_style']
                                         +' '
                                         +' '.join(['f_mean_{}[{}]'.format(key_pyiron, ii+1) for ii in range(len(key_lmp))]))
+

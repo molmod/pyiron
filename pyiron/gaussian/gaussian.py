@@ -303,7 +303,9 @@ class Gaussian(GenericDFTJob):
         freq_array[nma_zeros:] = np.array(freqs)
         freqs = freq_array * (lightspeed/centimeter) # put into atomic units
         ints = np.array(ints)
-        modes = np.array(modes).reshape(len(ints),nrat,3)
+
+        modes = np.array(modes).reshape(nrat,len(ints),3)
+        modes = np.swapaxes(modes,0,1)
 
         return freqs,ints,modes
 

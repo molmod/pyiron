@@ -59,7 +59,7 @@ class US(AtomisticParallelMaster):
         self.input['stride']      = (10, 'step for output printed to COLVAR output file.')
         self.input['temp']        = (300*kelvin, 'the system temperature')
         self.input['cv_grid']     = (list(np.linspace(0,1,10)), 'cv grid, has to be a list')
-        self.input['cvs']         = ([('distance', [0,1])], 'cv(s), see Yaff input for description')
+        self.input['cvs']         = ([('distance', [0,1])], 'cv(s), see set_us() for a Yaff job for description')
 
         self.input['h_min']       = (None , 'lowest value(s) of the cv(s) for WHAM')
         self.input['h_max']       = (None , 'highest value(s) of the cv(s) for WHAM')
@@ -97,7 +97,7 @@ class US(AtomisticParallelMaster):
 
             **Arguments**
 
-            f     function object that takes the reference structure object and a cv change as input and returns the altered structure
+            f     function object f(structure, cv) that takes the reference structure object and a cv change as input and returns the altered structure
         '''
 
         assert self.ref_job.structure is not None
