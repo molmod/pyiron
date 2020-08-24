@@ -55,6 +55,9 @@ class Project(ProjectCore):
                                      current working directory) path
         user (str): current pyiron user
         sql_query (str): SQL query to only select a subset of the existing jobs within the current project
+        default_working_directory (bool): Access default working directory, for ScriptJobs this equals the project
+                             directory of the ScriptJob for regular projects it falls back to the current
+                             directory.
 
     Attributes:
 
@@ -105,15 +108,20 @@ class Project(ProjectCore):
                                              ‘ConvergenceEncutParallel’, ‘ConvergenceKpointParallel’, ’PhonopyMaster’,
                                              ‘DefectFormationEnergy’, ‘LammpsASE’, ‘PipelineMaster’,
                                              ’TransformationPath’, ‘ThermoIntEamQh’, ‘ThermoIntDftEam’, ‘ScriptJob’,
-                                             ‘ListMaster’, ‘Gaussian’, ‘Yaff’, ‘US’]
+                                             ‘ListMaster’, ‘Gaussian’, ‘Yaff’, ‘US’, ‘Horton’]
     """
 
-    def __init__(self, path="", user=None, sql_query=None):
-        super(Project, self).__init__(path=path, user=user, sql_query=sql_query)
+    def __init__(self, path="", user=None, sql_query=None, default_working_directory=False):
+        super(Project, self).__init__(
+            path=path,
+            user=user,
+            sql_query=sql_query,
+            default_working_directory=default_working_directory
+        )
         self.job_type = JobTypeChoice()
         self.object_type = ObjectTypeChoice()
 
-    def create_job(self, job_type, job_name):
+    def create_job(self, job_type, job_name, delete_existing_job=False):
         """
         Create one of the following jobs:
         - 'StructureContainer’:
@@ -150,6 +158,7 @@ class Project(ProjectCore):
         - ‘Gaussian’:
         - ‘Yaff’:
         - ‘US’:
+        - ‘Horton’:
 
         Args:
             job_type (str): job type can be ['StructureContainer’, ‘StructurePipeline’, ‘AtomisticExampleJob’,
@@ -160,7 +169,7 @@ class Project(ProjectCore):
                                              ‘ConvergenceEncutParallel’, ‘ConvergenceKpointParallel’, ’PhonopyMaster’,
                                              ‘DefectFormationEnergy’, ‘LammpsASE’, ‘PipelineMaster’,
                                              ’TransformationPath’, ‘ThermoIntEamQh’, ‘ThermoIntDftEam’, ‘ScriptJob’,
-                                             ‘ListMaster’, ‘Gaussian’, ‘Yaff’, ‘US’]
+                                             ‘ListMaster’, ‘Gaussian’, ‘Yaff’, ‘US’, ‘Horton’]
             job_name (str): name of the job
 
         Returns:
@@ -171,6 +180,7 @@ class Project(ProjectCore):
             project=ProjectHDFio(project=self.copy(), file_name=job_name),
             job_name=job_name,
             job_class_dict=self.job_type.job_class_dict,
+            delete_existing_job=delete_existing_job,
         )
         if self.user is not None:
             job.user = self.user

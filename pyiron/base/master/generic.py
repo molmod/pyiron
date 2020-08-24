@@ -185,6 +185,11 @@ class GenericMaster(GenericJob):
         Args:
             job (GenericJob): job to append
         """
+        if self.status.initialized and not job.status.initialized:
+            raise ValueError(
+                "GenericMaster requires reference jobs to have status initialized, rather than ",
+                job.status.string
+            )
         if job.server.cores >= self.server.cores:
             self.server.cores = job.server.cores
         if job.job_name not in self._job_name_lst:
@@ -268,6 +273,24 @@ class GenericMaster(GenericJob):
                 if new_database_entry and child.master_id:
                     new_child.master_id = new_generic_job.job_id
         return new_generic_job
+
+    def update_master(self):
+        """
+        After a job is finished it checks whether it is linked to any metajob - meaning the master ID is pointing to
+        this jobs job ID. If this is the case and the master job is in status suspended - the child wakes up the master
+        job, sets the status to refresh and execute run on the master job. During the execution the master job is set to
+        status refresh. If another child calls update_master, while the master is in refresh the status of the master is
+        set to busy and if the master is in status busy at the end of the update_master process another update is
+        triggered.
+        """
+        master_id = self.master_id
+        project = self.project
+        self._logger.info("update master: {} {} {}".format(master_id, self.get_job_id(), self.server.run_mode))
+        if master_id is not None:
+            self._reload_update_master(
+                project=project,
+                master_id=master_id
+            )
 
     def to_hdf(self, hdf=None, group_name=None):
         """

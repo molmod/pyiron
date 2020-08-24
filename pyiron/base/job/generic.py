@@ -20,6 +20,7 @@ from pyiron.base.job.jobstatus import JobStatus
 from pyiron.base.job.core import JobCore
 from pyiron.base.generic.util import static_isinstance
 from pyiron.base.server.generic import Server
+from pyiron.base.database.filetable import FileTable
 import subprocess
 import shutil
 import warnings
@@ -154,6 +155,7 @@ class GenericJob(JobCore):
         super(GenericJob, self).__init__(project, job_name)
         self.__name__ = "GenericJob"
         self.__version__ = "0.4"
+        self.__hdf_version__ = "0.1.0"
         self._server = Server()
         self._logger = s.logger
         self._executable = None
@@ -431,7 +433,7 @@ class GenericJob(JobCore):
         """
         if self.job_id:
             self._status = JobStatus(
-                initial_status=self.project.db.get_item_by_id(self.job_id)["status"],
+                initial_status=self.project.db.get_job_status(self.job_id),
                 db=self.project.db,
                 job_id=self.job_id,
             )
@@ -644,17 +646,24 @@ class GenericJob(JobCore):
         self._job_id = job_id
         self._status = JobStatus(db=self.project.db, job_id=self._job_id)
 
-    def run(self, run_again=False, repair=False, debug=False, run_mode=None):
+    def run(self, delete_existing_job=False, repair=False, debug=False, run_mode=None, run_again=False):
         """
         This is the main run function, depending on the job status ['initialized', 'created', 'submitted', 'running',
         'collect','finished', 'refresh', 'suspended'] the corresponding run mode is chosen.
 
         Args:
-            run_again (bool): Delete the existing job and run the simulation again.
+            delete_existing_job (bool): Delete the existing job and run the simulation again.
             repair (bool): Set the job status to created and run the simulation again.
             debug (bool): Debug Mode - defines the log level of the subprocess the job is executed in.
             run_mode (str): ['modal', 'non_modal', 'queue', 'manual'] overwrites self.server.run_mode
+            run_again (bool): Same as delete_existing_job (deprecated)
         """
+        if run_again:
+            warnings.warn('run_again is deprecated as of vers. 0.3.0.'
+                          + 'It is not guaranteed to be in service in vers. 0.4.0.'
+                          + 'Either delete the job via job.remove() or via pr.create_job(delete_existing_job=True).',
+                          DeprecationWarning)
+            delete_existing_job=True
         try:
             self._logger.info(
                 "run {}, status: {}".format(self.job_info_str, self.status)
@@ -662,7 +671,7 @@ class GenericJob(JobCore):
             status = self.status.string
             if run_mode is not None:
                 self.server.run_mode = run_mode
-            if run_again and self.job_id:
+            if delete_existing_job and self.job_id:
                 self._logger.info("run repair " + str(self.job_id))
                 status = "initialized"
                 master_id, parent_id = self.master_id, self.parent_id
@@ -695,7 +704,7 @@ class GenericJob(JobCore):
             elif status == "busy":
                 self._run_if_busy()
             elif status == "finished":
-                self._run_if_finished(run_again=run_again)
+                self._run_if_finished(delete_existing_job=delete_existing_job)
         except Exception:
             self.drop_status_to_aborted()
             raise
@@ -780,19 +789,53 @@ class GenericJob(JobCore):
         if job_crashed:
             self.status.aborted = True
 
-    def transfer_from_remote(self, delete_remote=True):
+    def transfer_from_remote(self):
         s.queue_adapter.get_job_from_remote(
             working_directory='/'.join(self.working_directory.split('/')[:-1]),
-            delete_remote=delete_remote
+            delete_remote=s.queue_adapter.ssh_delete_file_on_remote
         )
         s.queue_adapter.transfer_file_to_remote(
             file=self.project_hdf5.file_name,
             transfer_back=True,
-            delete_remote=True,
+            delete_remote=s.queue_adapter.ssh_delete_file_on_remote
         )
         if s.database_is_disabled:
             self.project.db.update()
-        self.status.finished = True
+        else:
+            ft = FileTable(project=self.project_hdf5.path + "_hdf5/")
+            df = ft.job_table(all_columns=True)
+            db_dict_lst = []
+            for j, st, sj, p, h, hv, c, ts, tp, tc in zip(
+                    df.job.values,
+                    df.status.values,
+                    df.subjob.values,
+                    df.project.values,
+                    df.hamilton.values,
+                    df.hamversion.values,
+                    df.computer.values,
+                    df.timestart.values,
+                    df.timestop.values,
+                    df.totalcputime.values
+            ):
+                gp = self.project._convert_str_to_generic_path(p)
+                db_dict_lst.append({
+                    "username": s.login_user,
+                    "projectpath": gp.root_path,
+                    "project": gp.project_path,
+                    "job": j,
+                    "subjob": sj,
+                    "hamversion": hv,
+                    "hamilton": h,
+                    "status": st,
+                    "computer": c,
+                    "timestart": datetime.utcfromtimestamp(ts.tolist() / 1e9),
+                    "timestop": datetime.utcfromtimestamp(tp.tolist() / 1e9),
+                    "totalcputime": tc,
+                    "masterid": None,
+                    "parentid": None,
+                })
+            _ = [self.project.db.add_item_dict(d) for d in db_dict_lst]
+        self.status.string = self.project_hdf5["status"]
 
     def run_if_interactive(self):
         """
@@ -871,10 +914,16 @@ class GenericJob(JobCore):
         The run if non modal function is called by run to execute the simulation in the background. For this we use
         multiprocessing.Process()
         """
-        p = multiprocessing.Process(
-            target=multiprocess_wrapper,
-            args=(self.job_id, self.project_hdf5.working_directory, False),
-        )
+        if not s.using_local_database:
+            p = multiprocessing.Process(
+                target=multiprocess_wrapper,
+                args=(self.job_id, self.project_hdf5.working_directory, False, None),
+            )
+        else:
+            p = multiprocessing.Process(
+                target=multiprocess_wrapper,
+                args=(self.job_id, self.project_hdf5.working_directory, False, str(self.project.db.conn.engine.url)),
+            )
         if self.master_id and self.server.run_mode.non_modal:
             del self
             p.start()
@@ -999,6 +1048,7 @@ class GenericJob(JobCore):
         - ‘Yaff’:
         - ‘QuickFF’:
         - ‘US’:
+        - ‘Horton’:
 
         Args:
             job_type (str): job type can be ['StructureContainer’, ‘StructurePipeline’, ‘AtomisticExampleJob’,
@@ -1009,7 +1059,7 @@ class GenericJob(JobCore):
                                              ‘ConvergenceEncutParallel’, ‘ConvergenceKpointParallel’, ’PhonopyMaster’,
                                              ‘DefectFormationEnergy’, ‘LammpsASE’, ‘PipelineMaster’,
                                              ’TransformationPath’, ‘ThermoIntEamQh’, ‘ThermoIntDftEam’, ‘ScriptJob’,
-                                             ‘ListMaster', ‘Gaussian’, ‘Yaff’, ‘QuickFF’, ‘US’]
+                                             ‘ListMaster', ‘Gaussian’, ‘Yaff’, ‘QuickFF’, ‘US’, ‘Horton’]
             job_name (str): name of the job
 
         Returns:
@@ -1070,35 +1120,10 @@ class GenericJob(JobCore):
             and not self.server.run_mode.modal
             and not self.server.run_mode.interactive
         ):
-            queue_flag = self.server.run_mode.queue
-            master_db_entry = project.db.get_item_by_id(master_id)
-            if master_db_entry["status"] == "suspended":
-                project.db.item_update({"status": "refresh"}, master_id)
-                self._logger.info("run_if_refresh() called")
-                # p = multiprocessing.Process(target=multiprocess_master, args=(master_id,
-                #                                                               self.project.path,
-                #                                                               self.server.run_mode.thread,
-                #                                                               False))
-                # del self
-                # p.start()
-                del self
-                master_inspect = project.inspect(master_id)
-                if master_inspect["server"]["run_mode"] == "non_modal" or (
-                    master_inspect["server"]["run_mode"] == "modal" and queue_flag
-                ):
-                    master = project.load(master_id)
-                    # master = master_inspect.load_object()
-                    master.run_if_refresh()
-                # if master.server.run_mode.non_modal or master.server.run_mode.queue:
-                #     master._run_if_refresh()
-                #     if master.server.run_mode.queue and master._process:
-                #         master._process.communicate()
-            elif master_db_entry["status"] == "refresh":
-                project.db.item_update({"status": "busy"}, master_id)
-                self._logger.info(
-                    "busy master: {} {}".format(master_id, self.get_job_id())
-                )
-                del self
+            self._reload_update_master(
+                project=project,
+                master_id=master_id
+            )
 
     def job_file_name(self, file_name, cwd=None):
         """
@@ -1233,7 +1258,7 @@ class GenericJob(JobCore):
         """
         Create an restart calculation from the current calculation - in the GenericJob this is the same as create_job().
         A restart is only possible after the current job has finished. If you want to run the same job again with
-        different input parameters use job.run(run_again=True) instead.
+        different input parameters use job.run(delete_existing_job=True) instead.
 
         Args:
             job_name (str): job name of the new calculation - default=<job_name>_restart
@@ -1388,9 +1413,12 @@ class GenericJob(JobCore):
         """
         if (
             self.server.run_mode.queue
-            and not self.project.queue_check_job_is_waiting_or_running(self.job_id)
+            and not self.project.queue_check_job_is_waiting_or_running(self)
         ):
-            self.run(run_again=True)
+            if not s.queue_adapter.remote_flag:
+                self.run(delete_existing_job=True)
+            else:
+                self.transfer_from_remote()
         else:
             print("Job " + str(self.job_id) + " is waiting in the que!")
 
@@ -1401,9 +1429,9 @@ class GenericJob(JobCore):
         """
         if (
             self.server.run_mode.queue
-            and not self.project.queue_check_job_is_waiting_or_running(self.job_id)
+            and not self.project.queue_check_job_is_waiting_or_running(self)
         ):
-            self.run(run_again=True)
+            self.run(delete_existing_job=True)
         elif self.server.run_mode.interactive:
             self.run_if_interactive()
         elif self.server.run_mode.interactive_non_modal:
@@ -1466,15 +1494,21 @@ class GenericJob(JobCore):
         self.status.refresh = True
         self.run()
 
-    def _run_if_finished(self, run_again=False):
+    def _run_if_finished(self, delete_existing_job=False, run_again=False):
         """
         Internal helper function the run if finished function is called when the job status is 'finished'. It loads
         the existing job.
 
         Args:
-            run_again (bool): Delete the existing job and run the simulation again.
+            delete_existing_job (bool): Delete the existing job and run the simulation again.
+            run_again (bool): Same as delete_existing_job (deprecated)
         """
         if run_again:
+            warnings.warn('run_again is deprecated as of vers. 0.3.0.'
+                          + 'It is not guaranteed to be in service in vers. 0.4.0.'
+                          + 'Use delete_existing_job instead',
+                          DeprecationWarning)
+        if delete_existing_job:
             parent_id = self.parent_id
             self.parent_id = None
             self.remove()
@@ -1484,7 +1518,7 @@ class GenericJob(JobCore):
             self.run()
         else:
             self.logger.warning("The job {} is being loaded instead of running. To re-run use the argument "
-                                "'run_again=True'".format(self.job_name))
+                                "'delete_existing_job=True in create_job'".format(self.job_name))
             self.from_hdf()
 
     def _executable_activate(self, enforce=False):
@@ -1513,6 +1547,8 @@ class GenericJob(JobCore):
             self._hdf5["VERSION"] = self.executable.version
         else:
             self._hdf5["VERSION"] = self.__version__
+        if hasattr(self, "__hdf_version__"):
+            self._hdf5["HDF_VERSION"] = self.__hdf_version__
 
     def _type_from_hdf(self):
         """
@@ -1629,6 +1665,26 @@ class GenericJob(JobCore):
         """
         pass
 
+    def _reload_update_master(self, project, master_id):
+        queue_flag = self.server.run_mode.queue
+        master_db_entry = project.db.get_item_by_id(master_id)
+        if master_db_entry["status"] == "suspended":
+            project.db.set_job_status(job_id=master_id, status="refresh")
+            self._logger.info("run_if_refresh() called")
+            del self
+            master_inspect = project.inspect(master_id)
+            if master_inspect["server"]["run_mode"] == "non_modal" or (
+                    master_inspect["server"]["run_mode"] == "modal" and queue_flag
+            ):
+                master = project.load(master_id)
+                master.run_if_refresh()
+        elif master_db_entry["status"] == "refresh":
+            project.db.set_job_status(job_id=master_id, status="busy")
+            self._logger.info(
+                "busy master: {} {}".format(master_id, self.get_job_id())
+            )
+            del self
+
 
 class GenericError(object):
     def __init__(self, job):
@@ -1648,9 +1704,9 @@ class GenericError(object):
         return True
 
 
-def multiprocess_wrapper(job_id, working_dir, debug=False):
+def multiprocess_wrapper(job_id, working_dir, debug=False, connection_string=None):
     job_wrap = JobWrapper(
-        working_directory=str(working_dir), job_id=int(job_id), debug=debug
+        working_directory=str(working_dir), job_id=int(job_id), debug=debug, connection_string=connection_string
     )
     job_wrap.job.run_static()
 

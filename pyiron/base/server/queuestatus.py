@@ -5,7 +5,7 @@
 import pandas
 import time
 from pyiron.base.settings.generic import Settings
-from pyiron.base.job.jobtype import static_isinstance
+from pyiron.base.generic.util import static_isinstance
 
 """
 Set of functions to interact with the queuing system directly from within pyiron - optimized for the Sun grid engine.
@@ -30,11 +30,9 @@ s = Settings()
 def queue_table(job_ids=[], project_only=True, full_table=False):
     """
     Display the queuing system table as pandas.Dataframe
-
     Args:
         job_ids (list): check for a specific list of job IDs - empty list by default
         project_only (bool): Query only for jobs within the current project - True by default
-
     Returns:
         pandas.DataFrame: Output from the queuing system - optimized for the Sun grid engine
     """
@@ -67,10 +65,8 @@ def queue_table(job_ids=[], project_only=True, full_table=False):
 def queue_check_job_is_waiting_or_running(item):
     """
     Check if a job is still listed in the queue system as either waiting or running.
-
     Args:
         item (int, GenericJob): Provide either the job_ID or the full hamiltonian
-
     Returns:
         bool: [True/False]
     """
@@ -88,10 +84,8 @@ def queue_info_by_job_id(job_id):
     """
     Display the queuing system info of job by qstat | grep  shell command
     as dictionary
-
     Args:
         requested_id (int): query for a specific job_id
-
     Returns:
         dict: Dictionary with the output from the queuing system - optimized for the Sun grid engine
     """
@@ -104,7 +98,6 @@ def queue_info_by_job_id(job_id):
 def queue_is_empty():
     """
     Check if the queue table is currently empty - no more jobs to wait for.
-
     Returns:
         bool: True if the table is empty, else False - optimized for the Sun grid engine
     """
@@ -117,10 +110,8 @@ def queue_is_empty():
 def queue_delete_job(item):
     """
     Delete a job from the queuing system
-
     Args:
         item (int, pyiron.base.job.generic.GenericJob): Provide either the job_ID or the full hamiltonian
-
     Returns:
         str: Output from the queuing system as string - optimized for the Sun grid engine
     """
@@ -131,64 +122,70 @@ def queue_delete_job(item):
         return None
 
 
-def queue_enable_reservation(item):
+def queue_enable_reservation(item,reservation_id):
     """
     Enable a reservation for a particular job within the queuing system
-
     Args:
         item (int, pyiron.base.job.generic.GenericJob): Provide either the job_ID or the full hamiltonian
-
     Returns:
         str: Output from the queuing system as string - optimized for the Sun grid engine
     """
     que_id = _validate_que_request(item)
     if s.queue_adapter is not None:
         if isinstance(que_id, list):
-            return [s.queue_adapter.enable_reservation(process_id=q) for q in que_id]
+            return [s.queue_adapter.enable_reservation(process_id=q,reservation_id=reservation_id) for q in que_id]
         else:
-            return s.queue_adapter.enable_reservation(process_id=que_id)
+            return s.queue_adapter.enable_reservation(process_id=que_id,reservation_id=reservation_id)
     else:
         return None
+
 
 
 def wait_for_job(job, interval_in_s=5, max_iterations=100):
     """
     Sleep until the job is finished but maximum interval_in_s * max_iterations seconds.
-
     Args:
         job (pyiron.base.job.generic.GenericJob): Job to wait for
         interval_in_s (int): interval when the job status is queried from the database - default 5 sec.
         max_iterations (int): maximum number of iterations - default 100
     """
-    if s.queue_adapter is not None and s.queue_adapter.remote_flag and job.server.queue is not None:
-        finished = False
-        for _ in range(max_iterations):
-            if not job.project.queue_check_job_is_waiting_or_running(job):
-                job.transfer_from_remote()
-                finished = True
-                break
-            time.sleep(interval_in_s)
-        if not finished:
-            raise ValueError("Maximum iterations reached, but the job was not finished.")
-    else:
-        finished = False
-        for _ in range(max_iterations):
-            job.refresh_job_status()
-            if job.status.finished or job.status.aborted or job.status.not_converged:
-                finished = True
-                break
-            time.sleep(interval_in_s)
-        if not finished:
-            raise ValueError("Maximum iterations reached, but the job was not finished.")
+    if not (job.status.finished or job.status.aborted or job.status.not_converged):
+        if s.queue_adapter is not None and s.queue_adapter.remote_flag and job.server.queue is not None:
+            finished = False
+            for _ in range(max_iterations):
+                if not queue_check_job_is_waiting_or_running(item=job):
+                    s.queue_adapter.transfer_file_to_remote(
+                        file=job.project_hdf5.file_name,
+                        transfer_back=True,
+                        delete_remote=False
+                    )
+                    job.status.string = job.project_hdf5["status"]
+                if job.status.finished or job.status.aborted or job.status.not_converged:
+                    job.transfer_from_remote()
+                    finished = True
+                    break
+                time.sleep(interval_in_s)
+            if not finished:
+                raise ValueError("Maximum iterations reached, but the job was not finished.")
+        else:
+            finished = False
+            for _ in range(max_iterations):
+                if s.database_is_disabled:
+                    job.project.db.update()
+                job.refresh_job_status()
+                if job.status.finished or job.status.aborted or job.status.not_converged:
+                    finished = True
+                    break
+                time.sleep(interval_in_s)
+            if not finished:
+                raise ValueError("Maximum iterations reached, but the job was not finished.")
 
 
 def _validate_que_request(item):
     """
     Internal function to convert the job_ID or hamiltonian to the queuing system ID.
-
     Args:
         item (int, pyiron.base.job.generic.GenericJob): Provide either the job_ID or the full hamiltonian
-
     Returns:
         int: queuing system ID
     """

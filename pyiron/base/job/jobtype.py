@@ -5,9 +5,8 @@
 from __future__ import print_function
 import importlib
 import inspect
-import pkgutil
+import os
 from six import with_metaclass
-from pyiron.base.generic.util import static_isinstance
 
 """
 Jobtype class to create GenericJob type objects
@@ -37,6 +36,7 @@ JOB_CLASS_DICT = {
     "Gaussian": "pyiron.gaussian.gaussian",
     "GpawJob": "pyiron.gpaw.gpaw",
     "HessianJob": "pyiron.thermodynamics.hessian",
+    "Horton": "pyiron.horton.horton",
     "Lammps": "pyiron.lammps.lammps",
     "MapMaster": "pyiron.atomistics.master.parallel",
     "Murnaghan": "pyiron.atomistics.master.murnaghan",
@@ -112,7 +112,7 @@ class JobType(object):
     The JobTypeBase class creates a new object of a given class type.
     """
 
-    def __new__(cls, class_name, project, job_name, job_class_dict):
+    def __new__(cls, class_name, project, job_name, job_class_dict, delete_existing_job=False):
         """
         The __new__() method allows to create objects from other classes - the class selected by class_name
 
@@ -135,6 +135,14 @@ class JobType(object):
         else:
             raise TypeError()
         job = job_class(project, job_name)
+        if job.job_id is not None and not os.path.exists(job.project_hdf5.file_name):
+            job.logger.warning(
+                "No HDF5 file found - remove database entry and create new job! {}".format(job.job_name)
+            )
+            delete_existing_job = True
+        if delete_existing_job:
+            job.remove()
+            job = job_class(project, job_name)
         if job.status.aborted:
             job.logger.warning(
                 "Job aborted - please remove it and run again! {}".format(job.job_name)

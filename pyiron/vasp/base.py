@@ -875,7 +875,7 @@ class VaspBase(GenericDFTJob):
 
     def calc_minimize(
         self,
-        electronic_steps=400,
+        electronic_steps=60,
         ionic_steps=100,
         max_iter=None,
         pressure=None,
@@ -884,6 +884,8 @@ class VaspBase(GenericDFTJob):
         retain_electrostatic_potential=False,
         ionic_energy=None,
         ionic_forces=None,
+        ionic_energy_tolerance=None,
+        ionic_force_tolerance=None,
         volume_only=False,
     ):
         """
@@ -898,8 +900,10 @@ class VaspBase(GenericDFTJob):
             algorithm (str): Type of VASP algorithm to be used "Fast"/"Accurate"
             retain_charge_density (bool): True if the charge density should be written
             retain_electrostatic_potential (boolean): True if the electrostatic potential should be written
-            ionic_energy (float): Ionic energy convergence criteria (eV)
-            ionic_forces (float): Ionic forces convergence criteria (overwrites ionic energy) (ev/A)
+            ionic_energy_tolerance (float): Ionic energy convergence criteria (eV)
+            ionic_force_tolerance (float): Ionic forces convergence criteria (overwrites ionic energy) (ev/A)
+            ionic_energy (float): Same as ionic_energy_tolerance (deprecated)
+            ionic_forces (float): Same as ionic_force_tolerance (deprecated)
             volume_only (bool): Option to relax only the volume (keeping the relative coordinates fixed
         """
         super(VaspBase, self).calc_minimize(
@@ -910,8 +914,8 @@ class VaspBase(GenericDFTJob):
             algorithm=algorithm,
             retain_charge_density=retain_charge_density,
             retain_electrostatic_potential=retain_electrostatic_potential,
-            ionic_energy=ionic_energy,
-            ionic_forces=ionic_forces,
+            ionic_energy_tolerance=ionic_energy_tolerance,
+            ionic_force_tolerance=ionic_force_tolerance,
             volume_only=volume_only,
         )
         if volume_only:
@@ -939,7 +943,7 @@ class VaspBase(GenericDFTJob):
 
     def calc_static(
         self,
-        electronic_steps=400,
+        electronic_steps=100,
         algorithm=None,
         retain_charge_density=False,
         retain_electrostatic_potential=False,
@@ -1164,22 +1168,37 @@ class VaspBase(GenericDFTJob):
         )
 
     def set_convergence_precision(
-        self, ionic_energy=1.0e-3, electronic_energy=1.0e-7, ionic_forces=1.0e-2
+        self, ionic_energy_tolerance=1.0e-3, electronic_energy=1.0e-7, ionic_force_tolerance=1.0e-2,
+        ionic_energy=None, ionic_forces=None
     ):
         """
         Sets the electronic and ionic convergence precision. For ionic convergence either the energy or the force
         precision is required
 
         Args:
-            ionic_energy (float): Ionic energy convergence precision (eV)
+            ionic_energy_tolerance (float): Ionic energy convergence precision (eV)
             electronic_energy (float): Electronic energy convergence precision (eV)
-            ionic_forces (float): Ionic force convergence precision (eV/A)
+            ionic_force_tolerance (float): Ionic force convergence precision (eV/A)
+            ionic_energy (float): Same as ionic_energy_tolerance (deprecated)
+            ionic_forces (float): Same as ionic_force_tolerance (deprecated)
         """
+        if ionic_forces is not None:
+            warnings.warn(
+                "ionic_forces is deprecated as of vers. 0.3.0. It is not guaranteed to be in service in vers. 0.4.0. Use ionic_force_tolerance instead.",
+                DeprecationWarning
+            )
+            ionic_force_tolerance = ionic_forces
+        if ionic_energy is not None:
+            warnings.warn(
+                "ionic_energy is deprecated as of vers. 0.3.0. It is not guaranteed to be in service in vers. 0.4.0. Use ionic_energy_tolerance instead.",
+                DeprecationWarning
+            )
+            ionic_energy_tolerance = ionic_tolerance
         self.input.incar["EDIFF"] = electronic_energy
         if ionic_forces is not None:
-            self.input.incar["EDIFFG"] = -1.0 * abs(ionic_forces)
+            self.input.incar["EDIFFG"] = -1.0 * abs(ionic_force_tolerance)
         else:
-            self.input.incar["EDIFFG"] = abs(ionic_energy)
+            self.input.incar["EDIFFG"] = abs(ionic_energy_tolerance)
 
     def set_dipole_correction(self, direction=2, dipole_center=None):
         """
@@ -2254,6 +2273,18 @@ LWAVE = False
 LORBIT = 0
 """
         self.load_string(file_content)
+
+    def _bool_str_to_bool(self, val):
+        val = super(Incar, self)._bool_str_to_bool(val)
+        extra_bool = {True: "T", False: "F"}
+        for key, value in extra_bool.items():
+            if val == value:
+                return key
+        extra_bool = {True: ".True.", False: ".False."}
+        for key, value in extra_bool.items():
+            if val == value:
+                return key
+        return val
 
 
 class Kpoints(GenericParameters):
