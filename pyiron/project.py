@@ -715,7 +715,7 @@ class Project(ProjectCore):
         """
         ProjectGUI(self)
 
-    def create_pipeline(self, job, step_lst):
+    def create_pipeline(self, job, step_lst, delete_existing_job=False):
         """
         Create a job pipeline
 
@@ -726,4 +726,4 @@ class Project(ProjectCore):
         Returns:
             FlexibleMaster:
         """
-        return pipe(project=self, job=job, step_lst=step_lst)
+        return pipe(project=self, job=job, step_lst=step_lst, delete_existing_job=False)
