@@ -105,10 +105,10 @@ class HortonInput(GenericParameters):
         Loading the default settings for the input file.
         '''
         input_str = """\
-bci True
-gaussian True
-ffatypes high
-ei-scales 1,1,1
-bci-constraints None
+bci True # Convert averaged atomic charges to bond charge increments, i.e. charge transfers along the chemical bonds in the system.
+gaussian True # Use gaussian smeared charges
+ffatypes high # {None,list_of_atypes,low,medium,high,highest}
+ei-scales 1,1,1 # A comma-seperated list representing the electrostatic neighborscales
+bci-constraints None # A file containing constraints for the charge to bci fit in a master: slave0,slave1,...: sign format
 """
         self.load_string(input_str)
