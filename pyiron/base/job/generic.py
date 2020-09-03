@@ -1091,7 +1091,7 @@ class GenericJob(JobCore):
             job.ref_job = self
         return job
 
-    def create_pipeline(self, step_lst):
+    def create_pipeline(self, step_lst, delete_existing_job=False):
         """
         Create a job pipeline
 
@@ -1101,7 +1101,7 @@ class GenericJob(JobCore):
         Returns:
             FlexibleMaster:
         """
-        return self.project.create_pipeline(job=self, step_lst=step_lst)
+        return self.project.create_pipeline(job=self, step_lst=step_lst, delete_existing_job=delete_existing_job)
 
     def update_master(self):
         """
