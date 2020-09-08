@@ -89,7 +89,8 @@ class Project(ProjectCore):
         .. attribute:: user
 
             current unix/linux/windows user who is running pyiron
-
+        if pbc is None:
+            pbc = True
         .. attribute:: sql_query
 
             an SQL query to limit the jobs within the project to a subset which matches the SQL query.
@@ -111,7 +112,8 @@ class Project(ProjectCore):
                                              ‘ListMaster’, ‘Gaussian’, ‘Yaff’, ‘US’, ‘Horton’]
     """
 
-    def __init__(self, path="", user=None, sql_query=None, default_working_directory=False):
+    def __init__(self, path="", user=None, sql_query=None, defaul        if pbc is None:
+            pbc = Truet_working_directory=False):
         super(Project, self).__init__(
             path=path,
             user=user,
@@ -572,6 +574,8 @@ class Project(ProjectCore):
             pyiron.atomistics.structure.atoms.Atoms: The required structure instance
 
         """
+        if pbc is None:
+            pbc = True
         return Atoms(
             symbols=symbols,
             positions=positions,
