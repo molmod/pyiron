@@ -167,10 +167,10 @@ class QuickFF(AtomisticGenericJob):
             the ffatype_level employing the built-in routine in QuickFF.
         '''
         numbers = np.array([pt[symbol].number for symbol in self.structure.get_chemical_symbols()])
-        if self.structure.cell is None and self.structure.cell.volume > 0:
-            system = System(numbers, self.structure.positions.copy()*angstrom)
-        else:
+        if self.structure.cell is not None and self.structure.cell.volume > 0:
             system = System(numbers, self.structure.positions.copy()*angstrom, rvecs=self.structure.cell*angstrom)
+        else:
+            system = System(numbers, self.structure.positions.copy()*angstrom)
         system.detect_bonds()
 
         if not sum([ffatypes is None, ffatype_rules is None, ffatype_level is None]) == 2:
