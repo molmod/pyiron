@@ -826,10 +826,10 @@ class Yaff(AtomisticGenericJob):
             struct = self.get_structure(iteration_step=snapshot, wrap_atoms=False)
         pos = struct.positions.reshape(-1,3)*angstrom
         cell = struct.cell
-        if cell is None or cell.volume > 0:
-            system = System(numbers, pos, ffatypes=self.ffatypes, ffatype_ids=self.ffatype_ids)
-        else:
+        if cell is not None and cell.volume>0:
             system = System(numbers, pos, rvecs=cell*angstrom, ffatypes=self.ffatypes, ffatype_ids=self.ffatype_ids)
+        else:
+            system = System(numbers, pos, ffatypes=self.ffatypes, ffatype_ids=self.ffatype_ids)
         system.detect_bonds()
         system.set_standard_masses()
         return system
