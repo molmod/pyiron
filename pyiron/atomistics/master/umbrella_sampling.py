@@ -71,6 +71,85 @@ class US(AtomisticParallelMaster):
         self.structures = None   # list with structures corresponding to grid points
         self._job_generator = USJobGenerator(self)
 
+    def set_us(self,cvs,kappa,cv_grid,stride=10,temp=300*kelvin,h_min=None,h_max=None,h_bins=None,periodicity=None,tol=0.00001):
+        '''
+            Setup an Umbrella sampling run using PLUMED along the internal coordinates
+            defined in the CVs argument.
+
+            **Arguments**
+
+            cvs     a list of entries defining each a collective varibale. Each
+                    of these entries should be of the form (kind, [i, j, ...])
+
+                    Herein, kind defines the kind of CVs as implemented in PLUMED:
+
+                        i.e. distance, angle, torsion, volume, cell, ... see
+                        https://www.plumed.org/doc-v2.5/user-doc/html/_colvar.html
+                        for more information).
+
+                    and [i, j, ...] is a list of atom indices, starting from 0, involved in this
+                    CV. If no atom indices are required for e.g. volume, provide an empty list.
+
+                    An example for a 1D umbrella sampling simulation using the distance between
+                    atoms 2 and 4:
+
+                        cvs = [('distance', [2,4])]
+
+            kappa   the value of the force constant of the harmonic bias potential,
+                    can be a single value (the harmonic bias potential for each CV has identical kappa)
+                    or a list of values, one for each CV defined.
+
+            cv_grid
+                    the locations of the umbrellas, should be a list
+
+            stride  the number of steps after which the internal coordinate
+                    values and bias are printed to the COLVAR output file.
+
+            temp    the system temperature
+
+            h_min   lowest value(s) of the cv(s) for WHAM, defaults to lowest cv value in cv_grid
+
+            h_max   highest value(s) of the cv(s) for WHAM, defaults to highest cv value in cv_grid
+
+            h_bins  number of bins between h_min and h_max for WHAM, defaults to length of cv_grid
+
+            periodicity
+                    periodicity of cv(s)
+
+            tol     WHAM converges if free energy changes < tol
+        '''
+        self.input['cvs']         = cvs
+        self.input['kappa']       = kappa
+        self.input['cv_grid']     = cv_grid
+        self.input['stride']      = stride
+        self.input['temp']        = temp
+
+        if h_min is None:
+            if len(cvs)>1:
+                h_min = np.array([np.min(cvg) for cvg in cv_grid])
+            else:
+                h_min = np.min(cv_grid)
+
+        if h_max is None:
+            if len(cvs)>1:
+                h_max = np.array([np.max(cvg) for cvg in cv_grid])
+            else:
+                h_max = np.max(cv_grid)
+
+        if h_bins is None:
+            if len(cvs)>1:
+                h_max = np.array([len(cvg) for cvg in cv_grid])
+            else:
+                h_max = len(cv_grid)
+
+        self.input['h_min']       = h_min
+        self.input['h_max']       = h_max
+        self.input['h_bins']      = h_bins
+
+        self.input['periodicity'] = periodicity
+        self.input['tol']         = tol
+
+
     def list_structures(self):
         return self.structures
 
@@ -86,8 +165,11 @@ class US(AtomisticParallelMaster):
 
         cv = cv_f(job).reshape(-1,len(self.input['cvs']))
         idx = np.zeros(len(self.input['cv_grid']),dtype=int)
+        max_deviation = 0.
         for n,loc in enumerate(self.input['cv_grid']):
             idx[n] = np.argmin(np.linalg.norm(loc-cv,axis=-1))
+            max_deviation = max(max_deviation,np.linalg.norm(loc-cv,axis=-1)[idx[n]])
+        print('The largest deviation is equal to {}'.format(max_deviation))
 
         return [job.get_structure(i) for i in idx]
 

@@ -17,7 +17,7 @@ import os, posixpath, numpy as np, h5py, matplotlib.pyplot as pp
 
 def write_chk(input_dict,working_directory='.'):
     # collect data and initialize Yaff system
-    if 'cell' in input_dict.keys() and input_dict['cell'] is not None:
+    if 'cell' in input_dict.keys() and input_dict['cell'] is not None and input_dict['cell'].volume > 0:
         system = System(input_dict['numbers'], input_dict['pos']*angstrom, ffatypes=input_dict['ffatypes'], ffatype_ids=input_dict['ffatype_ids'], rvecs=input_dict['cell']*angstrom)
     else:
         system = System(input_dict['numbers'], input_dict['pos']*angstrom, ffatypes=input_dict['ffatypes'], ffatype_ids=input_dict['ffatype_ids'])
@@ -614,7 +614,7 @@ class Yaff(AtomisticGenericJob):
             the ffatype_level employing the built-in routine in QuickFF.
         '''
         numbers = np.array([pt[symbol].number for symbol in self.structure.get_chemical_symbols()])
-        if self.structure.cell is None:
+        if self.structure.cell is None and self.structure.cell.volume > 0:
             system = System(numbers, self.structure.positions.copy()*angstrom)
         else:
             system = System(numbers, self.structure.positions.copy()*angstrom, rvecs=self.structure.cell*angstrom)
@@ -664,7 +664,7 @@ class Yaff(AtomisticGenericJob):
 
         }
         input_dict['cell'] = None
-        if self.structure.cell is not None:
+        if self.structure.cell is not None and self.structure.cell.volume > 0:
              input_dict['cell'] = self.structure.get_cell()
         write_chk(input_dict,working_directory=self.working_directory)
         write_pars(input_dict=input_dict,working_directory=self.working_directory)
@@ -741,7 +741,7 @@ class Yaff(AtomisticGenericJob):
         if indices is not None:
             snapshot.indices = indices[iteration_step]
         if wrap_atoms and cells is not None:
-            return snapshot.center()
+            return snapshot.center_coordinates_in_unit_cell()
         else:
             return snapshot
 
@@ -826,7 +826,7 @@ class Yaff(AtomisticGenericJob):
             struct = self.get_structure(iteration_step=snapshot, wrap_atoms=False)
         pos = struct.positions.reshape(-1,3)*angstrom
         cell = struct.cell
-        if cell is None:
+        if cell is None and cell.volume > 0:
             system = System(numbers, pos, ffatypes=self.ffatypes, ffatype_ids=self.ffatype_ids)
         else:
             system = System(numbers, pos, rvecs=cell*angstrom, ffatypes=self.ffatypes, ffatype_ids=self.ffatype_ids)

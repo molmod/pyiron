@@ -21,7 +21,7 @@ import os, posixpath, numpy as np, h5py, matplotlib.pyplot as pp
 
 def write_chk(input_dict, working_directory='.'):
     # collect data and initialize Yaff system
-    if 'cell' in input_dict.keys() and input_dict['cell'] is not None:
+    if 'cell' in input_dict.keys() and input_dict['cell'] is not None and input_dict['cell'].volume > 0:
         system = System(input_dict['numbers'], input_dict['pos']*angstrom, rvecs=input_dict['cell']*angstrom, ffatypes=input_dict['ffatypes_man'], ffatype_ids=input_dict['ffatype_ids_man'])
     else:
         system = System(input_dict['numbers'], input_dict['pos']*angstrom, ffatypes=input_dict['ffatypes_man'], ffatype_ids=input_dict['ffatype_ids_man'])
@@ -167,7 +167,7 @@ class QuickFF(AtomisticGenericJob):
             the ffatype_level employing the built-in routine in QuickFF.
         '''
         numbers = np.array([pt[symbol].number for symbol in self.structure.get_chemical_symbols()])
-        if self.structure.cell is None:
+        if self.structure.cell is None and self.structure.cell.volume > 0:
             system = System(numbers, self.structure.positions.copy()*angstrom)
         else:
             system = System(numbers, self.structure.positions.copy()*angstrom, rvecs=self.structure.cell*angstrom)
@@ -212,7 +212,7 @@ class QuickFF(AtomisticGenericJob):
         for key in self.input._dataset["Parameter"]:
             input_dict[key] = self.input[key]
         input_dict['cell'] = None
-        if self.structure.cell is not None:
+        if self.structure.cell is not None and self.structure.cell.volume > 0:
              input_dict['cell'] = self.structure.get_cell()
         #load all input settings from self.input
         for key, value in self.input._dataset.items():
