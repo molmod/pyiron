@@ -138,9 +138,9 @@ class US(AtomisticParallelMaster):
 
         if h_bins is None:
             if len(cvs)>1:
-                h_max = np.array([len(cvg) for cvg in cv_grid])
+                h_bins = np.array([len(cvg) for cvg in cv_grid])
             else:
-                h_max = len(cv_grid)
+                h_bins = len(cv_grid)
 
         self.input['h_min']       = h_min
         self.input['h_max']       = h_max
