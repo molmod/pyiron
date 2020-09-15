@@ -2,7 +2,7 @@
 # Copyright (c) Max-Planck-Institut für Eisenforschung GmbH - Computational Materials Design (CM) Department
 # Distributed under the terms of "New BSD License", see the LICENSE file.
 
-import os,subprocess,re,pandas
+import os,subprocess,re,pandas,stat
 import numpy as np
 import matplotlib.pyplot as pt
 
@@ -232,17 +232,30 @@ class Gaussian(GenericDFTJob):
             orbital_energy = [self.get('output/structure/dft/alpha_orbital_e')[index],self.get('output/structure/dft/beta_orbital_e')[index]]
             print("Orbital energies (alpha,beta) = {:>10.5f},{:>10.5f} \t Occ. = {},{}".format(orbital_energy[0],orbital_energy[1],occ_alpha,occ_beta))
 
-        # make cube file
+        # Get cubegen path for execution
         path = self.path+'_hdf5/'+self.name+'/input'
         load_module = get_cubegen_path()
+        cubegen_script = path+'cubejob.sh'
 
+        # Add specific cubegen orbital line
+        with open(cubegen_script,'w') as g:
+            with open(load_module,'r') as f:
+                for line in f:
+                    g.write(line)
+            g.write("cubegen 1 MO={} {}.fchk {}.cube \n".format(index+1,path,path))
 
+        # Change permissions (equal to chmod +x)
+        st = os.stat(cubegen_script)
+        os.chmod(cubegen_script, st.st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH) # executable by everyone
+
+        # make cube file
         out = subprocess.check_output(
-                'exec ' + load_module + "; cubegen 1 MO={} {}.fchk {}.cube 0 h".format(index+1,path,path),
+                'exec '+path+'cubejob.sh',
                 stderr=subprocess.STDOUT,
                 universal_newlines=True,
                 shell=True,
             )
+
         # visualize cube file
         try:
             import nglview
