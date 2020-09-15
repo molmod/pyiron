@@ -224,7 +224,7 @@ class Gaussian(GenericDFTJob):
         # make cube file
         path = self.path+'_hdf5/'+self.name+'/input'
         out = subprocess.check_output(
-                "ml Gaussian; module use /apps/gent/CO7/haswell-ib/modules/all; cubegen 1 MO={} {}.fchk {}.cube".format(index+1,path,path),
+                "ml Gaussian/g16_C.01-intel-2019a; module use /apps/gent/CO7/haswell-ib/modules/all; cubegen 1 MO={} {}.fchk {}.cube".format(index+1,path,path),
                 stderr=subprocess.STDOUT,
                 universal_newlines=True,
                 shell=True,
