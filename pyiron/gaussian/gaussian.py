@@ -236,13 +236,13 @@ class Gaussian(GenericDFTJob):
         path = self.path+'_hdf5/'+self.name+'/input'
         load_module = get_cubegen_path()
 
-        with open(path+'err','w') as f:
-            out = subprocess.check_output(
-                    'exec ' + load_module + "; cubegen 1 MO={} {}.fchk {}.cube 0 h".format(index+1,path,path),
-                    stderr=f,
-                    universal_newlines=True,
-                    shell=True,
-                )
+
+        out = subprocess.check_output(
+                'exec ' + load_module + "; cubegen 1 MO={} {}.fchk {}.cube 0 h".format(index+1,path,path),
+                stderr=subprocess.STDOUT,
+                universal_newlines=True,
+                shell=True,
+            )
         # visualize cube file
         try:
             import nglview
