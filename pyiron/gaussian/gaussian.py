@@ -6,6 +6,7 @@ import os,subprocess,re,pandas
 import numpy as np
 import matplotlib.pyplot as pt
 
+from pyiron.base.settings.generic import Settings
 from pyiron.dft.job.generic import GenericDFTJob
 from pyiron.base.generic.parameters import GenericParameters
 from pyiron.atomistics.structure.atoms import Atoms
@@ -29,6 +30,15 @@ __email__ = ""
 __status__ = "trial"
 __date__ = "Aug 27, 2019"
 
+
+
+s = Settings()
+
+def get_cubegen_path():
+    for resource_path in s.resource_paths:
+        p = os.path.join(resource_path, "gaussian", "bin", "cubegen.sh")
+        if os.path.exists(p):
+            return p
 
 class Gaussian(GenericDFTJob):
     def __init__(self, project, job_name):
@@ -184,6 +194,7 @@ class Gaussian(GenericDFTJob):
                 print("#{}: \t Orbital energies (alpha,beta) = {:>10.5f},{:>10.5f} \t Occ. = {},{}".format(n,orbital_energy[0],orbital_energy[1],occ_alpha,occ_beta))
 
 
+
     def visualize_MO(self,index,particle_size=0.5,show_bonds=True):
         '''
             Visualize the MO identified by its index.
@@ -223,12 +234,15 @@ class Gaussian(GenericDFTJob):
 
         # make cube file
         path = self.path+'_hdf5/'+self.name+'/input'
-        out = subprocess.check_output(
-                "ml Gaussian/g16_C.01-intel-2019a; module use /apps/gent/CO7/haswell-ib/modules/all; cubegen 1 MO={} {}.fchk {}.cube".format(index+1,path,path),
-                stderr=subprocess.STDOUT,
-                universal_newlines=True,
-                shell=True,
-            )
+        load_module = get_cubegen_path()
+
+        with open(path+'err','w') as f:
+            out = subprocess.check_output(
+                    'exec ' + load_module + "; cubegen 1 MO={} {}.fchk {}.cube 0 h".format(index+1,path,path),
+                    stderr=f,
+                    universal_newlines=True,
+                    shell=True,
+                )
         # visualize cube file
         try:
             import nglview
