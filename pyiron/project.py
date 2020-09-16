@@ -199,7 +199,7 @@ class Project(ProjectCore):
         obj = ObjectType(object_type, project=None, job_name=None)
         return obj
 
-    def create_table(self, job_name="table"):
+    def create_table(self, job_name="table",delete_existing_job=False):
         """
         Create pyiron table
 
@@ -209,7 +209,7 @@ class Project(ProjectCore):
         Returns:
             pyiron.table.datamining.TableJob
         """
-        table = self.create_job(job_type=self.job_type.TableJob, job_name=job_name)
+        table = self.create_job(job_type=self.job_type.TableJob, job_name=job_name, delete_existing_job=delete_existing_job)
         table.analysis_project = self
         return table
 
