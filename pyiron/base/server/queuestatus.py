@@ -122,23 +122,19 @@ def queue_delete_job(item):
         return None
 
 
-def queue_enable_reservation(item,reservation_id):
+def queue_enable_reservation(reservation_id):
     """
-    Enable a reservation for a particular job within the queuing system
+    Enable a reservation for a particular project within the queuing system
     Args:
-        item (int, pyiron.base.job.generic.GenericJob): Provide either the job_ID or the full hamiltonian
+        reservation_id (str): Provide the reservation tag
+
     Returns:
         str: Output from the queuing system as string - optimized for the Sun grid engine
     """
-    que_id = _validate_que_request(item)
     if s.queue_adapter is not None:
-        if isinstance(que_id, list):
-            return [s.queue_adapter.enable_reservation(reservation_id=reservation_id) for q in que_id]
-        else:
-            return s.queue_adapter.enable_reservation(reservation_id=reservation_id)
+        return s.queue_adapter.enable_reservation(reservation_id)
     else:
         return None
-
 
 
 def wait_for_job(job, interval_in_s=5, max_iterations=100):
