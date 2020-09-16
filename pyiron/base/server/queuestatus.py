@@ -133,9 +133,9 @@ def queue_enable_reservation(item,reservation_id):
     que_id = _validate_que_request(item)
     if s.queue_adapter is not None:
         if isinstance(que_id, list):
-            return [s.queue_adapter.enable_reservation(process_id=q,reservation_id=reservation_id) for q in que_id]
+            return [s.queue_adapter.enable_reservation(reservation_id=reservation_id) for q in que_id]
         else:
-            return s.queue_adapter.enable_reservation(process_id=que_id,reservation_id=reservation_id)
+            return s.queue_adapter.enable_reservation(reservation_id=reservation_id)
     else:
         return None
 
