@@ -11,7 +11,7 @@ from configparser import ConfigParser
 from pathlib2 import Path
 from pyiron.base.settings.logger import setup_logger
 from pyiron.base.database.generic import DatabaseAccess
-from pyiron.base.settings.install import install_pyiron
+from pyiron.base.settings.install import install_dialog
 
 """
 The settings file provides the attributes of the configuration as properties.
@@ -93,9 +93,8 @@ class Settings(with_metaclass(Singleton)):
                 config=self._configuration
             )
         else:
-            print("Fall back to default configuration: "
-                  "{'resource_paths': ['~/pyiron/resources'], "
-                  "'project_paths': ['~/pyiron/projects']}")
+            install_dialog()
+            self._config_parse_file(config_file=config_file)
 
         # Take dictionary as primary source - overwrite everything
         self._read_external_config(config=config)
