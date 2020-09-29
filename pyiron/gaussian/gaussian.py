@@ -428,7 +428,7 @@ def write_input(input_dict,working_directory='.'):
     for key,valuelst in settings.items():
         if not isinstance(valuelst, list):
             valuelst = [valuelst]
-        option = key + "({}) ".format(",".join(valuelst))*(len(valuelst)>0)
+        option = key + "({})".format(",".join(valuelst))*(len(valuelst)>0) + ' '
         settings_string += option
 
     # Write to file
