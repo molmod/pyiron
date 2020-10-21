@@ -4,10 +4,13 @@ import matplotlib.pyplot as pt
 from molmod.units import *
 import subprocess, os
 
+from pyiron.base.settings.generic import Settings
 from pyiron.atomistics.master.parallel import AtomisticParallelMaster
 from pyiron.base.master.parallel import JobGenerator
 from pyiron.atomistics.structure.atoms import Atoms
 
+
+s = Settings()
 
 
 def get_wham_path():
