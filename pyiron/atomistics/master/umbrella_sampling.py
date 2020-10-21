@@ -2,7 +2,7 @@
 import numpy as np
 import matplotlib.pyplot as pt
 from molmod.units import *
-import subprocess, os
+import subprocess, os, stat
 
 from pyiron.base.settings.generic import Settings
 from pyiron.atomistics.master.parallel import AtomisticParallelMaster
@@ -11,7 +11,6 @@ from pyiron.atomistics.structure.atoms import Atoms
 
 
 s = Settings()
-
 
 def get_wham_path():
     for resource_path in s.resource_paths:
