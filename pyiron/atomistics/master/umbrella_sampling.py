@@ -8,6 +8,15 @@ from pyiron.atomistics.master.parallel import AtomisticParallelMaster
 from pyiron.base.master.parallel import JobGenerator
 from pyiron.atomistics.structure.atoms import Atoms
 
+
+
+def get_wham_path():
+    for resource_path in s.resource_paths:
+        p = os.path.join(resource_path, "yaff", "bin", "wham.sh")
+        if os.path.exists(p):
+            return p
+
+
 class USJobGenerator(JobGenerator):
     @property
     def parameter_list(self):
@@ -223,7 +232,11 @@ class US(AtomisticParallelMaster):
             tol     if no free energy value changes between iteration for more than tol, wham is converged
         '''
 
-        mdl_load = 'module load WHAM/2.0.9.1-intel-2019a-kj_mol;'
+
+        # Get cubegen path for execution
+        path = self.path+'_hdf5/'+self.name+'/'
+        load_module = get_wham_path()
+        wham_script = path+'wham_job.sh'
 
         if isinstance(h_min,(int,float)):
             cmd = 'wham'
@@ -242,13 +255,23 @@ class US(AtomisticParallelMaster):
         else:
             raise NotImplementedError()
 
-        subprocess.check_output(
-            mdl_load+cmd,
-            stderr=subprocess.STDOUT,
-            universal_newlines=True,
-            shell=True
-        )
+        with open(wham_script,'w') as g:
+            with open(load_module,'r') as f:
+                for line in f:
+                    g.write(line)
+            g.write(cmd)
 
+        # Change permissions (equal to chmod +x)
+        st = os.stat(wham_script)
+        os.chmod(wham_script, st.st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH) # executable by everyone
+
+        # make cube file
+        out = subprocess.check_output(
+                'exec '+path+'wham_job.sh',
+                stderr=subprocess.STDOUT,
+                universal_newlines=True,
+                shell=True,
+            )
 
     def get_structure(self, iteration_step=-1):
         '''
