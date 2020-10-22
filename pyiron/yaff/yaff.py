@@ -1,3 +1,4 @@
+# coding: utf-8
 from pyiron.base.generic.parameters import GenericParameters
 from pyiron.atomistics.structure.atoms import Atoms
 from pyiron.atomistics.job.atomistic import AtomisticGenericJob, GenericOutput
@@ -12,7 +13,17 @@ from molmod.constants import *
 from molmod.periodic import periodic as pt
 import subprocess
 
-import os, posixpath, numpy as np, h5py, matplotlib.pyplot as pp
+import os, posixpath, numpy as np, h5py, matplotlib.pyplot as pp, stat
+
+
+s = Settings()
+
+def get_plumed_path():
+    for resource_path in s.resource_paths:
+        p = os.path.join(resource_path, "yaff", "bin", "plumed.sh")
+        if os.path.exists(p):
+            return p
+
 
 
 def write_chk(input_dict,working_directory='.'):
@@ -859,9 +870,25 @@ class Yaff(AtomisticGenericJob):
             fn = posixpath.join(self.working_directory, self.enhanced['file'])
         fn_out = posixpath.join(self.working_directory, 'fes.dat')
 
-        subprocess.check_output(
-            "ml load PLUMED/2.5.2-intel-2019a-Python-3.7.2; plumed sum_hills --hills {} --outfile {}".format(fn,fn_out),
-            stderr=subprocess.STDOUT,
-            universal_newlines=True,
-            shell=True
-        )
+        # Get plumed path for execution
+        path = self.path+'_hdf5/'+self.name+'/'
+        load_module = get_plumed_path()
+        plumed_script = path+'plumed_job.sh'
+
+        with open(plumed_script,'w') as g:
+            with open(load_module,'r') as f:
+                for line in f:
+                    g.write(line)
+            g.write("plumed sum_hills --hills {} --outfile {}".format(fn,fn_out))
+
+        # Change permissions (equal to chmod +x)
+        st = os.stat(plumed_script)
+        os.chmod(plumed_script, st.st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH) # executable by everyone
+
+        # execute wham
+        out = subprocess.check_output(
+                'exec '+path+'plumed_job.sh',
+                stderr=subprocess.STDOUT,
+                universal_newlines=True,
+                shell=True,
+            )

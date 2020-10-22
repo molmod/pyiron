@@ -235,7 +235,7 @@ class US(AtomisticParallelMaster):
         '''
 
 
-        # Get cubegen path for execution
+        # Get wham path for execution
         path = self.path+'_hdf5/'+self.name+'/'
         load_module = get_wham_path()
         wham_script = path+'wham_job.sh'
@@ -267,7 +267,7 @@ class US(AtomisticParallelMaster):
         st = os.stat(wham_script)
         os.chmod(wham_script, st.st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH) # executable by everyone
 
-        # make cube file
+        # execute wham
         out = subprocess.check_output(
                 'exec '+path+'wham_job.sh',
                 stderr=subprocess.STDOUT,
