@@ -18,6 +18,10 @@ def get_wham_path():
         if os.path.exists(p):
             return p
 
+class InputError(Exception):
+    """Simple error class with clear meaning."""
+    pass
+
 
 class USJobGenerator(JobGenerator):
     @property
@@ -129,11 +133,28 @@ class US(AtomisticParallelMaster):
 
             tol     WHAM converges if free energy changes < tol
         '''
+
         self.input['cvs']         = cvs
         self.input['kappa']       = kappa
-        self.input['cv_grid']     = cv_grid
+        self.input['cv_grid']     = np.asarray(cv_grid).tolist()
         self.input['stride']      = stride
         self.input['temp']        = temp
+
+        # Check if cv_grid is well defined
+        try:
+            _ = iter(self.input['cv_grid'])
+            if isinstance(self.input['cv_grid'],str): raise TypeError
+        except TypeError:
+            raise InputError('Your cv_grid is not iterable! Please define a proper cv_grid.')
+
+        # Check the shape of the cv_grid
+        try:
+            shape = np.asarray(self.input['cv_grid']).shape
+            if len(shape)>1:
+                assert len(shape)==2
+                assert shape[1]==len(self.input['cvs'])
+        except AssertionError:
+            raise InputError('Your cv_grid has the wrong shape. It should either be a flat array/list or an array with shape (N,#cvs)')
 
         if h_min is None:
             if len(cvs)>1:

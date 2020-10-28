@@ -40,6 +40,10 @@ def get_cubegen_path():
         if os.path.exists(p):
             return p
 
+class InputError(Exception):
+    """Simple error class with clear meaning."""
+    pass
+
 class Gaussian(GenericDFTJob):
     def __init__(self, project, job_name):
         super(Gaussian, self).__init__(project, job_name)
@@ -60,6 +64,7 @@ class Gaussian(GenericDFTJob):
                       'spin_mult': self.input['spin_mult'],
                       'charge': self.input['charge'],
                       'bsse_idx': self.input['bsse_idx'],
+                      'spin_orbit_states': self.input['spin_orbit_states'],
                       'symbols': self.structure.get_chemical_symbols().tolist(),
                       'pos': self.structure.positions
                       }
@@ -423,6 +428,8 @@ def write_input(input_dict,working_directory='.'):
         # Check if it only contains conseqcutive numbers (sum of set should be n*(n+1)/2)
         assert sum(set(input_dict['bsse_idx'])) == (max(input_dict['bsse_idx'])*(max(input_dict['bsse_idx']) + 1))/2
 
+
+
     # Parse settings
     settings_string = ""
     for key,valuelst in settings.items():
@@ -431,8 +438,13 @@ def write_input(input_dict,working_directory='.'):
         option = key + "({})".format(",".join(valuelst))*(len(valuelst)>0) + ' '
         settings_string += option
 
+    # Spin-orbit check
+    lot_line = "".join(lot.lower().split())
+    if 'spin' in lot_line and not 'nroot' in lot_line:
+        lot_line = lot_line[:-1] + ',nroot=1)' # add the nroot option if it is not given
+
     # Write to file
-    route_section = "#{} {}/{} {} {}\n\n".format(verbosity,lot,basis_set,jobtype,settings_string)
+    route_section = "#{} {}/{} {} {}\n\n".format(verbosity,lot_line,basis_set,jobtype,settings_string)
     with open(os.path.join(working_directory, 'input.com'), 'w') as f:
         f.write("%mem={}\n".format(mem))
         f.write("%chk=input.chk\n")
@@ -443,7 +455,7 @@ def write_input(input_dict,working_directory='.'):
             f.write("{} {}\n".format(charge,spin_mult))
             for n,p in enumerate(pos):
                 f.write(" {}\t{: 1.6f}\t{: 1.6f}\t{: 1.6f}\n".format(symbols[n],p[0],p[1],p[2]))
-            f.write('\n\n') # don't know whether this is still necessary in G16
+            f.write('\n')
         else:
             if isinstance(charge,list) and isinstance(spin_mult,list): # for BSSE it is possible to define charge and multiplicity for the fragments separately
                 f.write(" ".join(["{},{}".format(charge[idx],spin_mult[idx]) for idx in range(int(settings['Counterpoise']))])) # first couple is for full system, then every fragment separately
@@ -452,7 +464,25 @@ def write_input(input_dict,working_directory='.'):
 
             for n,p in enumerate(pos):
                 f.write(" {}(Fragment={})\t{: 1.6f}\t{: 1.6f}\t{: 1.6f}\n".format(symbols[n],input_dict['bsse_idx'][n],p[0],p[1],p[2]))
-            f.write('\n\n') # don't know whether this is still necessary in G16
+            f.write('\n')
+
+        if 'cas' in lot_line:
+            if 'nroot' in lot_line:
+                nroot = int(re.search(r'nroot=\s*(\d+)', lot_line).group(1))
+                weights = [np.round(1./nroot,2) for i in range(nroot)]
+                if not sum(weights) == 1:
+                    weights[-1] = np.round(1-sum(weights[:-1]),2)
+                f.write(" ".join([str(w) for w in weights]))
+                f.write('\n\n')
+
+            if 'spin' in lot_line:
+                assert input_dict['spin_orbit_states'] is not None
+                assert len(input_dict['spin_orbit_states']) == 2
+                assert all(isinstance(state, int) for state in input_dict['spin_orbit_states'])
+
+                f.write(" ".join([str(state) for state in input_dict['spin_orbit_states']]))
+                f.write('\n\n')
+        f.write('\n')
 
 
 # we could use theochem iodata, should be more robust than molmod.io
@@ -535,7 +565,7 @@ def get_bsse_array(line,it):
 
 
 def read_bsse(output_file,output_dict):
-    # Check whether the route section contains the Counterpoise setting (if fchk module is update, route section can be loaded from dict)
+    # Check whether the route section contains the Counterpoise setting
     cp = False
     with open(output_file,'r') as f:
         line = f.readline()
