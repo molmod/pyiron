@@ -86,7 +86,7 @@ class NMA(tamkin.NMA):
             animation.add_ball_and_stick()
         return animation
 
-    def plot_IR_spectrum(self,width=10*lightspeed/centimeter,scale=1.0,intensities=None,charges=None):
+    def plot_IR_spectrum(self,width=10*lightspeed/centimeter,scale=1.0,intensities=None,charges=None,verbose=True):
         """
             Plot IR spectrum based on Lorentzian width, freqs can be scaled through scale
             Intensities can be provided (e.g. from a Gaussian job) or calculated from the charges
@@ -126,7 +126,8 @@ class NMA(tamkin.NMA):
                 else:
                     intensity = intensities[n]
                 alphas += intensity*self._lorentz(xr,wn,width)
-                print('Mode %i:    freq = %.3f 1/cm    IR ampl. = %.3e a.u.' %(n, wn/(lightspeed/centimeter), intensity))
+                if verbose:
+                    print('Mode %i:    freq = %.3f 1/cm    IR ampl. = %.3e a.u.' %(n, wn/(lightspeed/centimeter), intensity))
 
 
             pt.clf()
