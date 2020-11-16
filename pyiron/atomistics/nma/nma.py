@@ -127,7 +127,7 @@ class NMA(tamkin.NMA):
                     intensity = np.sum(Zp**2)
                 else:
                     intensity = intensities[n]
-                alphas += intensity*lorentz(xr,wn,width)
+                alphas += intensity*self._lorentz(xr,wn,width)
                 if verbose:
                     print('Mode %i:    freq = %.3f 1/cm    IR ampl. = %.3e a.u.' %(n, wn/(lightspeed/centimeter), intensity))
 
