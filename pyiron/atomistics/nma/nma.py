@@ -113,22 +113,23 @@ class NMA(tamkin.NMA):
             xr = np.arange(0,5001,1)*lightspeed/centimeter
             alphas = np.zeros(len(xr))
 
-            # Calculate intensities
-            amps = self.modes
-            freqs = self.freqs * scale
-            for n, (wn, ampn) in enumerate(zip(np.delete(freqs,self.zeros),np.delete(amps,self.zeros,axis=0))): #self.zeros contain the indices of the zero frequencies
+            #nma.zeros contain the indices of the zero frequencies
+            freqs = np.delete(self.freqs,self.zeros) * scale
+            amps = np.delete(self.modes,self.zeros,axis=-1)  # this are mass-weighted Cartesian modes, final axis corresponds to atoms!
+
+            # Calculate intensities or read them
+            for n,wn in enumerate(freqs):
                 if not charges is None:
-                    intensity = 0.0
-                    for k in range(3):
-                        for i, qi in enumerate(charges):
-                            idx = 3*i+k
-                            intensity += (qi*ampn[idx])**2
+                    ampn = amps[:,n].reshape(-1,3)
+                    # born charges in terms of normal coordinates, for pth mode
+                    # sum over atoms and cartesian coordinate
+                    Zp = np.einsum('ij,i->j',ampn,charges/np.sqrt(self.masses))
+                    intensity = np.sum(Zp**2)
                 else:
                     intensity = intensities[n]
-                alphas += intensity*self._lorentz(xr,wn,width)
+                alphas += intensity*lorentz(xr,wn,width)
                 if verbose:
                     print('Mode %i:    freq = %.3f 1/cm    IR ampl. = %.3e a.u.' %(n, wn/(lightspeed/centimeter), intensity))
-
 
             pt.clf()
             pt.plot(xr/(lightspeed/centimeter),alphas)
