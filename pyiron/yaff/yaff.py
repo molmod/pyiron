@@ -325,6 +325,9 @@ def hdf2dict(h5):
             hdict['generic/energy_tot'] = h5['trajectory/etot'][:]/electronvolt
         if 'econs' in h5['trajectory'].keys():
             hdict['generic/energy_cons'] = h5['trajectory/econs'][:]/electronvolt
+        if 'epot_contribs' in h5['trajectory'].keys():
+            hdict['generic/epot_contribs'] = h5['trajectory/epot_contribs'][:]/electronvolt
+            hdict['generic/epot_contrib_names'] = h5['trajectory/'].attrs.get('epot_contrib_names')
         if 'press' in h5['trajectory'].keys():
             hdict['generic/pressure'] = h5['trajectory/press'][:]/(1e9*pascal)
         if 'gradient' in h5['trajectory'].keys():
