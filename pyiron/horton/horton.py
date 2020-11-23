@@ -3,7 +3,7 @@ from pyiron.base.generic.parameters import GenericParameters
 from pyiron.base.job.generic import GenericJob
 from pyiron.base.settings.generic import Settings
 
-import os, posixpath, h5py, stat
+import os, posixpath, h5py, stat, glob
 
 
 s = Settings()
@@ -14,9 +14,22 @@ def get_horton_path():
         if os.path.exists(p):
             return p
 
+def get_horton_template():
+    for resource_path in s.resource_paths:
+        p = os.path.join(resource_path, "horton", "bin", "template.com")
+        if os.path.exists(p):
+            return p
+
 def get_quickff_path():
     for resource_path in s.resource_paths:
-        p = os.path.join(resource_path, "quickff", "bin", "quickff.sh")
+        p = os.path.join(resource_path, "quickff", "bin", "run_*.sh")
+        p = glob.glob(p)[0] # get quickff executable
+        if os.path.exists(p):
+            return p
+
+def get_gaussian_path():
+    for resource_path in s.resource_paths:
+        p = os.path.join(resource_path, "gaussian", "bin", "cubegen.sh")
         if os.path.exists(p):
             return p
 
@@ -41,6 +54,9 @@ class Horton(GenericJob):
                       'ei-scales': self.input['ei-scales'],
                       'bci-constraints': self.input['bci-constraints'],
                       'scheme': self.scheme,
+                      'numbers': list(set(self.structure.numbers)),
+                      'lot': self.lot,
+                      'basis_set': self.basis_set,
                       }
         write_input(input_dict=input_dict, working_directory=self.working_directory)
 
@@ -64,6 +80,8 @@ class Horton(GenericJob):
         self.fchk = posixpath.join(job.working_directory, "input.fchk")
         self.scheme = scheme
         self.structure = job.structure
+        self.lot = job.input['lot']
+        self.basis_set = job.input['basis_set']
 
     def collect_output(self):
         output_dict = collect_output(output_file=os.path.join(self.working_directory, 'horton_out.h5'))
@@ -109,21 +127,50 @@ def write_input(input_dict,working_directory='.'):
     with open(posixpath.join(working_directory,'qff_input_ei.py'), 'w') as f:
         f.write(body)
 
+    with open(posixpath.join(working_directory,'template.com'), 'w') as g:
+        with open(get_horton_template(),'r') as f:
+            for n,line in enumerate(f):
+                if n==1:
+                    g.write(line.format(lot=input_dict['lot'],basis=input_dict['basis_set']))
+                else:
+                    g.write(line)
+
 
     horton_script = posixpath.join(working_directory,'horton_job.sh')
     with open(horton_script,'w') as g:
         with open(get_horton_path(),'r') as f:
             for line in f:
                 g.write(line)
-        if input_dict['scheme'] in ['b','is','mbis']:
-            g.write("horton-wpart.py --grid veryfine input.fchk horton_out.h5 {} > horton.log".format(input_dict['scheme']))
+            g.write('\n')
+
+        if not input_dict['scheme'] in ['b','is','mbis']:
+            g.write("mkdir atomdb; cp template.com atomdb/; cd atomdb/\n")
+            g.write("horton-atomdb.py input g09 {} template.com\n\n".format(",".join([str(n) for n in input_dict['numbers']])))
+            with open(get_gaussian_path(),'r') as f:
+                for line in f:
+                    if not line.startswith('#'):
+                        g.write(line)
+                g.write('\n')
+            g.write("sed -i 's/g09/g16/g' run_g09.sh\n") # replace gaussian09 by gaussian16
+            g.write("./run_g09.sh\n\n")
+
+            with open(get_horton_path(),'r') as f:
+                for n,line in enumerate(f):
+                    if not line.startswith('#'):
+                        g.write(line)
+                g.write('\n')
+            g.write("horton-atomdb.py convert\n")
+            g.write("mv atoms.h5 ..; cd ..\n")
+            g.write("horton-wpart.py --grid veryfine input.fchk horton_out.h5 {} atoms.h5 > horton.log\n\n".format(input_dict['scheme']))
         else:
-            raise NotImplementedError('These schemes have not been implemented. Try again later.')
-            g.write("horton-wpart.py --grid veryfine input.fchk horton_out.h5 {} atoms.h5 > horton.log".format(input_dict['scheme']))
-        g.write('\n\n')
+            g.write("horton-wpart.py --grid veryfine input.fchk horton_out.h5 {} > horton.log\n\n".format(input_dict['scheme']))
+
         with open(get_quickff_path(),'r') as f:
             for line in f:
-                g.write(line)
+                if not line.startswith('#') and (line.startswith('ml') or line.startswith('module')):
+                    g.write(line)
+            g.write('\n')
+        g.write("python qff_input_ei.py\n")
 
         # Change permissions (equal to chmod +x)
         st = os.stat(horton_script)
