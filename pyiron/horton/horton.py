@@ -3,7 +3,22 @@ from pyiron.base.generic.parameters import GenericParameters
 from pyiron.base.job.generic import GenericJob
 from pyiron.base.settings.generic import Settings
 
-import os, posixpath, h5py
+import os, posixpath, h5py, stat
+
+
+s = Settings()
+
+def get_horton_path():
+    for resource_path in s.resource_paths:
+        p = os.path.join(resource_path, "horton", "bin", "horton.sh")
+        if os.path.exists(p):
+            return p
+
+def get_quickff_path():
+    for resource_path in s.resource_paths:
+        p = os.path.join(resource_path, "quickff", "bin", "quickff.sh")
+        if os.path.exists(p):
+            return p
 
 
 class Horton(GenericJob):
@@ -12,6 +27,8 @@ class Horton(GenericJob):
         self.__name__ = "Horton"
         self._executable_activate(enforce=True)
         self.input = HortonInput()
+        self.structure = None
+        self.scheme = None
         self.fchk = None
         self.pars_file = os.path.join(self.working_directory, 'pars_ei.txt')
         print('Warning: Horton jobs can only be performed on the golett, swalot and phanpy clusters!')
@@ -23,10 +40,11 @@ class Horton(GenericJob):
                       'ffatypes': self.input['ffatypes'],
                       'ei-scales': self.input['ei-scales'],
                       'bci-constraints': self.input['bci-constraints'],
+                      'scheme': self.scheme,
                       }
         write_input(input_dict=input_dict, working_directory=self.working_directory)
 
-    def calculate_AIM_charges(self,job):
+    def calculate_AIM_charges(self,job,scheme='mbis'):
         try:
             self.restart_file_list.append(
                 posixpath.join(job.working_directory, "input.fchk")
@@ -37,7 +55,15 @@ class Horton(GenericJob):
                     job.job_name
                 )
             )
+
+        try:
+            assert scheme in ['b','h','hi','is','he','mbis']
+        except AssertionError:
+            raise ValueError('Your scheme should be one of the following: b,h,hi,is,he,mbis.')
+
         self.fchk = posixpath.join(job.working_directory, "input.fchk")
+        self.scheme = scheme
+        self.structure = job.structure
 
     def collect_output(self):
         output_dict = collect_output(output_file=os.path.join(self.working_directory, 'horton_out.h5'))
@@ -60,11 +86,6 @@ class Horton(GenericJob):
             print(f.read())
 
 
-import_statement = """#! /usr/bin/python
-from quickff.scripts import qff_input_ei
-
-"""
-
 def write_input(input_dict,working_directory='.'):
     options=[]
     if input_dict['ffatypes'] is not None:
@@ -82,9 +103,31 @@ def write_input(input_dict,working_directory='.'):
     if input_dict['bci-constraints'] is not None:
         options+= ['--bci-constraints {}'.format(input_dict['bci-constraints'])]
 
+    import_statement = """#! /usr/bin/python \nfrom quickff.scripts import qff_input_ei\n"""
+
     body = import_statement + 'qff_input_ei("{} input.fchk horton_out.h5:/charges")'.format(' '.join(options))
     with open(posixpath.join(working_directory,'qff_input_ei.py'), 'w') as f:
         f.write(body)
+
+
+    horton_script = posixpath.join(working_directory,'horton_job.sh')
+    with open(horton_script,'w') as g:
+        with open(get_horton_path(),'r') as f:
+            for line in f:
+                g.write(line)
+        if input_dict['scheme'] in ['b','is','mbis']:
+            g.write("horton-wpart.py --grid veryfine input.fchk horton_out.h5 {} > horton.log".format(input_dict['scheme']))
+        else:
+            raise NotImplementedError('These schemes have not been implemented. Try again later.')
+            g.write("horton-wpart.py --grid veryfine input.fchk horton_out.h5 {} atoms.h5 > horton.log".format(input_dict['scheme']))
+        g.write('\n\n')
+        with open(get_quickff_path(),'r') as f:
+            for line in f:
+                g.write(line)
+
+        # Change permissions (equal to chmod +x)
+        st = os.stat(horton_script)
+        os.chmod(horton_script, st.st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH) # executable by everyone
 
 def collect_output(output_file):
     # this routine basically reads and returns the output HDF5 file produced by Yaff
