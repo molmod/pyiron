@@ -44,7 +44,7 @@ class Horton(GenericJob):
         self.scheme = None
         self.fchk = None
         self.pars_file = os.path.join(self.working_directory, 'pars_ei.txt')
-        print('Warning: Horton jobs can only be performed on the golett, swalot and phanpy clusters!')
+        print('Warning: Horton jobs can only be performed on the swalot and phanpy clusters!')
 
 
     def write_input(self):
