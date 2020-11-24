@@ -106,7 +106,8 @@ system.to_file('opt.chk')
     with open(posixpath.join(working_directory,'yscript.py'), 'w') as f:
         f.write(body)
 
-def write_ysp(input_dict,working_directory='.'):
+def __write_ysp(input_dict,working_directory='.'):
+    """Deprecated due to not making a trajectory group"""
     body = common.format(
         rcut=input_dict['rcut']/angstrom, alpha_scale=input_dict['alpha_scale'],
         gcut_scale=input_dict['gcut_scale'], smooth_ei=input_dict['smooth_ei'],
@@ -116,6 +117,23 @@ def write_ysp(input_dict,working_directory='.'):
 energy = ff.compute()
 system.to_hdf5(f)
 f['system/energy'] = energy
+"""
+    body+= tail
+    with open(posixpath.join(working_directory,'yscript.py'), 'w') as f:
+        f.write(body)
+
+def write_ysp(input_dict,working_directory='.'):
+    body = common.format(
+        rcut=input_dict['rcut']/angstrom, alpha_scale=input_dict['alpha_scale'],
+        gcut_scale=input_dict['gcut_scale'], smooth_ei=input_dict['smooth_ei'],
+        h5step=1,
+    )
+    body += "dof = CartesianDOF(ff, gpos_rms={gpos_rms}, dpos_rms={dpos_rms})".format(
+        gpos_rms=input_dict['gpos_rms'],dpos_rms=input_dict['dpos_rms']
+    )
+    body += """
+opt = CGOptimizer(dof, hooks=[hdf5])
+opt.run(0) # just caluculate the energy
 """
     body+= tail
     with open(posixpath.join(working_directory,'yscript.py'), 'w') as f:
