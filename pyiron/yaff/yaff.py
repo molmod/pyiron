@@ -28,12 +28,15 @@ def get_plumed_path():
 
 def write_chk(input_dict,working_directory='.'):
     # collect data and initialize Yaff system
+    if 'bonds' in input_dict.keys():
+        bonds = input_dict['bonds']
     if 'cell' in input_dict.keys() and input_dict['cell'] is not None and input_dict['cell'].volume > 0:
-        system = System(input_dict['numbers'], input_dict['pos']*angstrom, ffatypes=input_dict['ffatypes'], ffatype_ids=input_dict['ffatype_ids'], rvecs=input_dict['cell']*angstrom)
-    else:
-        system = System(input_dict['numbers'], input_dict['pos']*angstrom, ffatypes=input_dict['ffatypes'], ffatype_ids=input_dict['ffatype_ids'])
-    # determine masses, bonds and ffaypes from ffatype_rules
-    system.detect_bonds()
+        cell = input_dict['cell']*angstrom
+    system = System(input_dict['numbers'], input_dict['pos']*angstrom, ffatypes=input_dict['ffatypes'], ffatype_ids=input_dict['ffatype_ids'], bonds=bonds, rvecs=cell)
+
+    if not 'bonds' in input_dict.keys():
+        system.detect_bonds()
+        print('Warning: no bonds could be read and are being detected automatically.')
     system.set_standard_masses()
     # write dictionary to MolMod CHK file
     system.to_file(posixpath.join(working_directory,'system.chk'))
@@ -391,6 +394,7 @@ class Yaff(AtomisticGenericJob):
         self.__name__ = "Yaff"
         self._executable_activate(enforce=True)
         self.input = YaffInput()
+        self.bonds = None
         self.ffatypes = None
         self.ffatype_ids = None
         self.enhanced = None  # should have more generic name e.g. enhanced
@@ -472,13 +476,19 @@ class Yaff(AtomisticGenericJob):
                                   temperature_damping_timescale=timecon_thermo,
                                   pressure_damping_timescale=timecon_baro)
 
-    def load_chk(self, fn):
+    def load_chk(self, fn, bonds_dict=None):
         '''
             Load the atom types, atom type ids and structure by reading a .chk file.
 
             **Arguments**
 
             fn      the path to the chk file
+
+            bonds_dict
+                    Specify custom threshold for certain pairs of elements. This
+                    must be a dictionary with ((num0, num1), threshold) as items.
+                    see Yaff.System.detect_bonds() for more information
+
         '''
 
         system = System.from_file(fn)
@@ -502,6 +512,8 @@ class Yaff(AtomisticGenericJob):
             self.ffatypes = system.ffatypes
         if system.ffatype_ids is not None:
             self.ffatype_ids = system.ffatype_ids
+        system.detect_bonds(bonds_dict)
+        self.bonds = system.bonds
 
     def set_mtd(self, ics, height, sigma, pace, fn='HILLS', fn_colvar='COLVAR', stride=10, temp=300):
         '''
@@ -619,7 +631,7 @@ class Yaff(AtomisticGenericJob):
             'file_colvar': fn_colvar, 'stride': stride, 'temp': temp
         }
 
-    def detect_ffatypes(self, ffatypes=None, ffatype_rules=None, ffatype_level=None):
+    def detect_ffatypes(self, ffatypes=None, ffatype_rules=None, ffatype_level=None, bonds_dict=None):
         '''
             Define atom types by explicitely giving them through the
             ffatypes keyword, defining atype rules using the ATSELECT
@@ -629,10 +641,15 @@ class Yaff(AtomisticGenericJob):
         '''
         numbers = np.array([pt[symbol].number for symbol in self.structure.get_chemical_symbols()])
         if self.structure.cell is not None and self.structure.cell.volume > 0:
-            system = System(numbers, self.structure.positions.copy()*angstrom, rvecs=self.structure.cell*angstrom)
+            system = System(numbers, self.structure.positions.copy()*angstrom, rvecs=self.structure.cell*angstrom, bonds=self.bonds)
         else:
-            system = System(numbers, self.structure.positions.copy()*angstrom)
-        system.detect_bonds()
+            system = System(numbers, self.structure.positions.copy()*angstrom, bonds=self.bonds)
+
+        try:
+            assert self.bonds is not None
+        except AssertionError:
+            system.detect_bonds(bonds_dict)
+            print('Warning: no bonds could be read and are automatically detected.')
 
         if not sum([ffatypes is None, ffatype_rules is None, ffatype_level is None]) == 2:
             raise IOError('Exactly one of ffatypes, ffatype_rules and ffatype_level should be defined')
@@ -654,6 +671,7 @@ class Yaff(AtomisticGenericJob):
             'jobtype': self.input['jobtype'],
             'symbols': self.structure.get_chemical_symbols(),
             'numbers': np.array([pt[symbol].number for symbol in self.structure.get_chemical_symbols()]),
+            'bonds': self.bonds,
             'ffatypes': self.ffatypes,
             'ffatype_ids': self.ffatype_ids,
             'ffpars': self.input['ffpars'],
@@ -713,6 +731,7 @@ class Yaff(AtomisticGenericJob):
         with self.project_hdf5.open("input") as hdf5_input:
             self.structure.to_hdf(hdf5_input)
             self.input.to_hdf(hdf5_input)
+            hdf5_input['generic/bonds'] = self.bonds
             hdf5_input['generic/ffatypes'] = np.asarray(self.ffatypes,'S22')
             hdf5_input['generic/ffatype_ids'] = self.ffatype_ids
             if not self.enhanced is None:
@@ -725,6 +744,7 @@ class Yaff(AtomisticGenericJob):
         with self.project_hdf5.open("input") as hdf5_input:
             self.input.from_hdf(hdf5_input)
             self.structure = Atoms().from_hdf(hdf5_input)
+            self.bonds = hdf5_input['generic/bonds']
             self.ffatypes = np.char.decode(hdf5_input['generic/ffatypes']) # decode byte string literals
             self.ffatype_ids = hdf5_input['generic/ffatype_ids']
 
