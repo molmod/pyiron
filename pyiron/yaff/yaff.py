@@ -28,6 +28,7 @@ def get_plumed_path():
 
 def write_chk(input_dict,working_directory='.'):
     # collect data and initialize Yaff system
+    bonds, cell = None, None
     if 'bonds' in input_dict.keys():
         bonds = input_dict['bonds']
     if 'cell' in input_dict.keys() and input_dict['cell'] is not None and input_dict['cell'].volume > 0:
