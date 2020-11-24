@@ -35,7 +35,7 @@ def write_chk(input_dict,working_directory='.'):
 
     if input_dict['bonds'] is None:
         system.detect_bonds()
-        print('Warning: no bonds could be read and are being detected automatically.')
+        print('Warning: no bonds could be read and were automatically detected.')
     system.set_standard_masses()
     # write dictionary to MolMod CHK file
     system.to_file(posixpath.join(working_directory,'system.chk'))
@@ -666,7 +666,8 @@ class Yaff(AtomisticGenericJob):
             assert self.bonds is not None
         except AssertionError:
             system.detect_bonds(bonds_dict)
-            print('Warning: no bonds could be read and are automatically detected.')
+            self.bonds = system.bonds
+            print('Warning: no bonds could be read and were automatically detected.')
 
         if not sum([ffatypes is None, ffatype_rules is None, ffatype_level is None]) == 2:
             raise IOError('Exactly one of ffatypes, ffatype_rules and ffatype_level should be defined')
