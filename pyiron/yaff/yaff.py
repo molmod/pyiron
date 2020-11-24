@@ -28,14 +28,12 @@ def get_plumed_path():
 
 def write_chk(input_dict,working_directory='.'):
     # collect data and initialize Yaff system
-    bonds, cell = None, None
-    if 'bonds' in input_dict.keys():
-        bonds = input_dict['bonds']
+    cell = None
     if 'cell' in input_dict.keys() and input_dict['cell'] is not None and input_dict['cell'].volume > 0:
         cell = input_dict['cell']*angstrom
-    system = System(input_dict['numbers'], input_dict['pos']*angstrom, ffatypes=input_dict['ffatypes'], ffatype_ids=input_dict['ffatype_ids'], bonds=bonds, rvecs=cell)
+    system = System(input_dict['numbers'], input_dict['pos']*angstrom, ffatypes=input_dict['ffatypes'], ffatype_ids=input_dict['ffatype_ids'], bonds=input_dict['bonds'], rvecs=cell)
 
-    if not 'bonds' in input_dict.keys():
+    if input_dict['bonds'] is None:
         system.detect_bonds()
         print('Warning: no bonds could be read and are being detected automatically.')
     system.set_standard_masses()
