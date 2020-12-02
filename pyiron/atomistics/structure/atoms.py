@@ -107,7 +107,7 @@ class Atoms(ASEAtoms):
         self._is_scaled = False
 
         self._species = list()
-        self.indices = np.array([])
+        self.indices = np.array([],dtype=np.int)
         self.constraints = None
         self._pse = PeriodicTable()
         self._tag_list = SparseArray()
@@ -168,7 +168,7 @@ class Atoms(ASEAtoms):
             el_index_lst = indices
             self.set_species(species)
 
-        self.indices = np.array(el_index_lst)
+        self.indices = np.array(el_index_lst, dtype=np.int)
 
         el_lst = [el.Abbreviation if el.Parent is None else el.Parent for el in self.species]
         symbols = np.array([el_lst[el] for el in self.indices])
