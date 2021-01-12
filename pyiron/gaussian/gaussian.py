@@ -417,7 +417,7 @@ def write_input(input_dict,working_directory='.'):
     if not input_dict['jobtype'] is None:
         jobtype = input_dict['jobtype']
         if " " in jobtype:
-            warnings.warn('Please refrain from specifying settings in the jobtype, and use the settings dictionary. Some settings or sanity checks might not work this way.')
+            warnings.warn('Please refrain from specifying multiple jobtypes or settings in the jobtype. To specify different settings, use the settings dictionary instead.')
     else:
         jobtype = "" # corresponds to sp
 
