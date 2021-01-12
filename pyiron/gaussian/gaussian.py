@@ -2,7 +2,7 @@
 # Copyright (c) Max-Planck-Institut für Eisenforschung GmbH - Computational Materials Design (CM) Department
 # Distributed under the terms of "New BSD License", see the LICENSE file.
 
-import os,subprocess,re,pandas,stat
+import os,subprocess,re,pandas,stat,warnings
 import numpy as np
 import matplotlib.pyplot as pt
 
@@ -63,6 +63,7 @@ class Gaussian(GenericDFTJob):
                       'title' : self.input['title'],
                       'spin_mult': self.input['spin_mult'],
                       'charge': self.input['charge'],
+                      'gic': self.input['gic'],
                       'bsse_idx': self.input['bsse_idx'],
                       'spin_orbit_states': self.input['spin_orbit_states'],
                       'symbols': self.structure.get_chemical_symbols().tolist(),
@@ -358,6 +359,22 @@ class Gaussian(GenericDFTJob):
         return df
 
 
+    def thermochemistry_to_pandas(self):
+        '''
+        Convert thermochemistry output to a pandas Dataframe object.
+
+        Returns:
+            pandas.Dataframe: output as dataframe
+        '''
+        assert 'freq' in self.input['jobtype'] # check if there was a freq calculation
+        tmp = {}
+        with self.project_hdf5.open('output/structure/thermochemistry') as hdf:
+            for key in hdf.list_nodes():
+                tmp[key] = hdf[key] if isinstance(hdf[key],np.ndarray) else [hdf[key]]
+            df = pandas.DataFrame(tmp)
+        return df
+
+
 class GaussianInput(GenericParameters):
     def __init__(self, input_file_name=None):
         super(GaussianInput, self).__init__(input_file_name=input_file_name, table_name="input_inp", comment_char="#")
@@ -399,6 +416,8 @@ def write_input(input_dict,working_directory='.'):
 
     if not input_dict['jobtype'] is None:
         jobtype = input_dict['jobtype']
+        if " " in jobtype:
+            warnings.warn('Please refrain from specifying settings in the jobtype, and use the settings dictionary. Some settings or sanity checks might not work this way.')
     else:
         jobtype = "" # corresponds to sp
 
@@ -420,7 +439,7 @@ def write_input(input_dict,working_directory='.'):
     else:
         verbosity='n'
 
-    if 'Counterpoise' in settings.keys():
+    if 'counterpoise' in list(settings.keys()).lower():
         if input_dict['bsse_idx'] is None or not len(input_dict['bsse_idx'])==len(pos) : # check if all elements are present for a BSSE calculation
             raise ValueError('The Counterpoise setting requires a valid bsse_idx array')
         # Check bsse idx (should start from 1 for Gaussian)
@@ -428,6 +447,9 @@ def write_input(input_dict,working_directory='.'):
         # Check if it only contains conseqcutive numbers (sum of set should be n*(n+1)/2)
         assert sum(set(input_dict['bsse_idx'])) == (max(input_dict['bsse_idx'])*(max(input_dict['bsse_idx']) + 1))/2
 
+    if 'geom' in list(settings.keys()).lower() and 'addgic' in settings['geom']:
+        assert self.input['gic'] is not None
+        self.input['gic'] = self.input['gic'].strip() # remove leading and trailing whitespaces
 
 
     # Parse settings
@@ -466,6 +488,10 @@ def write_input(input_dict,working_directory='.'):
                 f.write(" {}(Fragment={})\t{: 1.6f}\t{: 1.6f}\t{: 1.6f}\n".format(symbols[n],input_dict['bsse_idx'][n],p[0],p[1],p[2]))
             f.write('\n')
 
+        if 'geom' in list(settings.keys()).lower() and 'addgic' in settings['geom']:
+            f.write(self.input['gic'])
+            f.write('\n\n')
+
         if 'cas' in lot_line:
             if 'nroot' in lot_line:
                 nroot = int(re.search(r'nroot=\s*(\d+)', lot_line).group(1))
@@ -489,9 +515,13 @@ def write_input(input_dict,working_directory='.'):
 # but we require the latest iodata for this, not the conda version
 def fchk2dict(fchk):
     # probably still some data missing
-    # check job type, for now implement basics (SP=single point, FOpt = full opt, Freq = frequency calculation)
-    if not fchk.command.lower() in ['sp','fopt','freq']:
-        raise NotImplementedError
+    # check job type, for now implement basics (SP=single point, FOpt = full opt, Freq = frequency calculation, FTS = transition state)
+    if not fchk.command.lower() in ['sp','fopt','freq','fts','popt','pts','fsaddle','psaddle','force','scan','lst','stability','mixed']:
+        raise NotImplementedError('The output parsing for your selected jobtype is not yet implemented. Our apologies.')
+    if fchk.command.lower() in ['force','scan','lst','stability','mixed']:
+        raise NotImplementedError('The output parsing for your selected jobtype is not yet implemented. If you require this jobtype please let us know.')
+    if fchk.command.lower() in ['fts','popt','pts','fsaddle','psaddle']:
+        warnings.warn('NOTE: this jobtype is newly implemented. If certain output data is missing from the job output, let us know and we will patch it.')
 
     # Basic information
     fchkdict = {}
@@ -523,7 +553,7 @@ def fchk2dict(fchk):
         fchkdict['structure/dft/post_spin_scf_density'] = _triangle_to_dense(fchk.fields.get('Spin {} Density'.format(fchk.lot)))
 
     # Specific job information
-    if fchkdict['jobtype'] == 'fopt':
+    if fchkdict['jobtype'] in ['fopt','popt','fts','pts','fsaddle','psaddle']:
         if len(fchk.get_optimization_coordinates().shape) == 3:
             fchkdict['structure/positions']   = fchk.get_optimization_coordinates()[-1]/angstrom
         else:
@@ -562,6 +592,29 @@ def get_bsse_array(line,it):
     E_tot_corr = float(rx.findall(line)[0])/electronvolt
 
     return E_tot_corr,bsse_corr,sum_fragments,cE_raw,cE_corr
+
+def get_thermochemistry_array(line,it):
+    numeric_const_pattern = '[-+]? (?: (?: \d* \. \d+ ) | (?: \d+ \.? ) )(?: [Ee] [+-]? \d+ ) ?'
+    rx = re.compile(numeric_const_pattern, re.VERBOSE)
+
+    sum_el_th_fe = float(rx.findall(line)[0])/electronvolt
+    line = next(it) # go to next line
+    sum_el_th_enthalpy = float(rx.findall(line)[0])/electronvolt
+    line = next(it) # go to next line
+    sum_el_th_energy = float(rx.findall(line)[0])/electronvolt
+    line = next(it) # go to next line
+    sum_el_zp_e = float(rx.findall(line)[0])/electronvolt
+    line = next(it) # go to next line
+    th_corr_gibbs_fe = float(rx.findall(line)[0])/electronvolt
+    line = next(it) # go to next line
+    th_corr_enthalpy = float(rx.findall(line)[0])/electronvolt
+    line = next(it) # go to next line
+    th_corr_energy = float(rx.findall(line)[0])/electronvolt
+    line = next(it) # go to next line
+    zp_energy = float(rx.findall(line)[0])/electronvolt
+
+    return zp_energy,th_corr_energy,th_corr_enthalpy,th_corr_gibbs_fe,sum_el_zp_e,sum_el_th_energy,sum_el_th_enthalpy,sum_el_th_fe
+
 
 
 def read_bsse(output_file,output_dict):
@@ -618,6 +671,29 @@ def read_bsse(output_file,output_dict):
             output_dict['structure/bsse/complexation_energy_corrected'] = output_dict['structure/bsse/complexation_energy_corrected'][::-1]
 
 
+def read_thermochemistry(output_file,output_dict):
+    # Check whether this is a frequency job
+    if output_dict['jobtype']=='freq':
+        # the log file has the same path and name as the output file aside from the file extension
+        log_file = output_file[:output_file.rfind('.')] + '.log'
+        it = _reverse_readline(log_file)
+        line = next(it)
+
+        found = False
+        while not found:
+            line = next(it)
+            if 'Sum of electronic and thermal Free Energies' in line:
+                zp_energy,th_corr_energy,th_corr_enthalpy,th_corr_gibbs_fe,sum_el_zp_e,sum_el_th_energy,sum_el_th_enthalpy,sum_el_th_fe = get_thermochemistry_array(line,it)
+                output_dict['structure/thermochemistry/zero_point_energy'] = zp_energy
+                output_dict['structure/thermochemistry/thermal_correction_energy'] = th_corr_energy
+                output_dict['structure/thermochemistry/thermal_correction_enthalpy'] = th_corr_enthalpy
+                output_dict['structure/thermochemistry/thermal_correction_gibbs_free_energy'] = th_corr_gibbs_fe
+                output_dict['structure/thermochemistry/sum_electronic_zero_point_energy'] = sum_el_zp_e
+                output_dict['structure/thermochemistry/sum_electronic_thermal_energy'] = sum_el_th_energy
+                output_dict['structure/thermochemistry/sum_electronic_thermal_enthalpy'] = sum_el_th_enthalpy
+                output_dict['structure/thermochemistry/sum_electronic_thermal_free_energy'] = sum_el_th_fe
+                found = True
+
 def read_EmpiricalDispersion(output_file,output_dict):
     # Get dispersion term from log file if it is there
     # dispersion term is not retrieved from gaussian output in fchk
@@ -659,6 +735,9 @@ def collect_output(output_file):
 
     # Read BSSE output if it is present
     read_bsse(output_file,output_dict)
+
+    # Read BSSE output if it is present
+    read_thermochemistry(output_file,output_dict)
 
     # Correct energy if empirical dispersion contribution is present
     read_EmpiricalDispersion(output_file,output_dict)
