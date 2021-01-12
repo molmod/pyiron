@@ -384,7 +384,7 @@ class Gaussian(GenericDFTJob):
         rx = self.get('output/structure/irc_path')
         energy = self.get('output/generic/energy_tot')
         pt.clf()
-        pt.plot(rx,energy)
+        pt.plot(rx,energy,'bo--')
         pt.xlabel('Intrinsic reaction coordinate [a.u.]')
         pt.ylabel('Total energy [a.u.]')
         pt.show()
