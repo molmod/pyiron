@@ -449,8 +449,8 @@ def write_input(input_dict,working_directory='.'):
         assert sum(set(input_dict['bsse_idx'])) == (max(input_dict['bsse_idx'])*(max(input_dict['bsse_idx']) + 1))/2
 
     if 'geom' in settings_keys and 'addgic' in settings['geom']:
-        assert self.input['gic'] is not None
-        self.input['gic'] = self.input['gic'].strip() # remove leading and trailing whitespaces
+        assert input_dict['gic'] is not None
+        input_dict['gic'] = input_dict['gic'].strip() # remove leading and trailing whitespaces
 
 
     # Parse settings
@@ -490,7 +490,7 @@ def write_input(input_dict,working_directory='.'):
             f.write('\n')
 
         if 'geom' in settings_keys and 'addgic' in settings['geom']:
-            f.write(self.input['gic'])
+            f.write(input_dict['gic'])
             f.write('\n\n')
 
         if 'cas' in lot_line:
