@@ -571,12 +571,12 @@ def fchk2dict(fchk):
 
     # Specific job information
     if fchkdict['jobtype'] in ['fopt','popt','fts','pts','fsaddle','psaddle']:
-        if 'Opt point       1 Geometries' in fchk.field.keys(): # IRC calculations also have the fopt jobtype, but not this key
+        if 'Opt point       1 Geometries' in fchk.fields.keys(): # IRC calculations also have the fopt jobtype, but not this key
             opt_coords = fchk.get_optimization_coordinates()
             opt_energies = fchk.get_optimization_energies()
             opt_gradients = fchk.get_optimization_gradients()
             irc_path = None
-        elif 'IRC point       1 Geometries' in fchk.field.keys():
+        elif 'IRC point       1 Geometries' in fchk.fields.keys():
             opt_coords = np.reshape(fchk.fields.get('IRC point       1 Geometries'),(-1, len(fchkdict['structure/numbers']), 3))
             opt_energies = fchk.fields.get('IRC point       1 Results for each geome')[::2]
             opt_gradients = np.reshape(fchk.fields.get('IRC point       1 Gradient at each geome'),(-1, len(fchkdict['structure/numbers']), 3))
