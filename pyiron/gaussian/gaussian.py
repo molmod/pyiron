@@ -439,7 +439,8 @@ def write_input(input_dict,working_directory='.'):
     else:
         verbosity='n'
 
-    if 'counterpoise' in list(settings.keys()).lower():
+    settings_keys = [key.lower() for key in settings.keys()]
+    if 'counterpoise' in settings_keys:
         if input_dict['bsse_idx'] is None or not len(input_dict['bsse_idx'])==len(pos) : # check if all elements are present for a BSSE calculation
             raise ValueError('The Counterpoise setting requires a valid bsse_idx array')
         # Check bsse idx (should start from 1 for Gaussian)
@@ -447,7 +448,7 @@ def write_input(input_dict,working_directory='.'):
         # Check if it only contains conseqcutive numbers (sum of set should be n*(n+1)/2)
         assert sum(set(input_dict['bsse_idx'])) == (max(input_dict['bsse_idx'])*(max(input_dict['bsse_idx']) + 1))/2
 
-    if 'geom' in list(settings.keys()).lower() and 'addgic' in settings['geom']:
+    if 'geom' in settings_keys and 'addgic' in settings['geom']:
         assert self.input['gic'] is not None
         self.input['gic'] = self.input['gic'].strip() # remove leading and trailing whitespaces
 
@@ -488,7 +489,7 @@ def write_input(input_dict,working_directory='.'):
                 f.write(" {}(Fragment={})\t{: 1.6f}\t{: 1.6f}\t{: 1.6f}\n".format(symbols[n],input_dict['bsse_idx'][n],p[0],p[1],p[2]))
             f.write('\n')
 
-        if 'geom' in list(settings.keys()).lower() and 'addgic' in settings['geom']:
+        if 'geom' in settings_keys and 'addgic' in settings['geom']:
             f.write(self.input['gic'])
             f.write('\n\n')
 
