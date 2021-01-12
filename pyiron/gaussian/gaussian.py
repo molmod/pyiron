@@ -374,6 +374,21 @@ class Gaussian(GenericDFTJob):
             df = pandas.DataFrame(tmp)
         return df
 
+    def plot_irc(self):
+        '''
+        Plot the intrinsic reaction coordinate vs energy
+
+        Returns:
+        '''
+        assert 'irc' in self.input['jobtype'] # check if there was an irc calculation
+        rx = self.get('output/structure/irc_path')
+        energy = self.get('output/generic/energy_tot')
+        pt.clf()
+        pt.plot(rx,energy)
+        pt.xlabel('Intrinsic reaction coordinate [a.u.]')
+        pt.ylabel('Total energy [a.u.]')
+        pt.show()
+
 
 class GaussianInput(GenericParameters):
     def __init__(self, input_file_name=None):
@@ -516,7 +531,8 @@ def write_input(input_dict,working_directory='.'):
 # but we require the latest iodata for this, not the conda version
 def fchk2dict(fchk):
     # probably still some data missing
-    # check job type, for now implement basics (SP=single point, FOpt = full opt, Freq = frequency calculation, FTS = transition state)
+    # check job type, for now implement basics (SP=single point, opt=optimization, freq=hessian calculation, ts=transition state, saddle=saddle point, f=full, p=partial)
+
     if not fchk.command.lower() in ['sp','fopt','freq','fts','popt','pts','fsaddle','psaddle','force','scan','lst','stability','mixed']:
         raise NotImplementedError('The output parsing for your selected jobtype is not yet implemented. Our apologies.')
     if fchk.command.lower() in ['force','scan','lst','stability','mixed']:
@@ -555,13 +571,27 @@ def fchk2dict(fchk):
 
     # Specific job information
     if fchkdict['jobtype'] in ['fopt','popt','fts','pts','fsaddle','psaddle']:
-        if len(fchk.get_optimization_coordinates().shape) == 3:
-            fchkdict['structure/positions']   = fchk.get_optimization_coordinates()[-1]/angstrom
+        if 'Opt point       1 Geometries' in fchk.field.keys(): # IRC calculations also have the fopt jobtype, but not this key
+            opt_coords = fchk.get_optimization_coordinates()
+            opt_energies = fchk.get_optimization_energies()
+            opt_gradients = fchk.get_optimization_gradients()
+            irc_path = None
+        elif 'IRC point       1 Geometries' in fchk.field.keys():
+            opt_coords = np.reshape(fchk.fields.get('IRC point       1 Geometries'),(-1, len(fchkdict['structure/numbers']), 3))
+            opt_energies = fchk.fields.get('IRC point       1 Results for each geome')[::2]
+            opt_gradients = np.reshape(fchk.fields.get('IRC point       1 Gradient at each geome'),(-1, len(fchkdict['structure/numbers']), 3))
+            irc_path = fchk.fields.get('IRC point       1 Results for each geome')[1::2]
+
+        if len(opt_coords.shape) == 3:
+            fchkdict['structure/positions']   = opt_coords[-1]/angstrom
         else:
-            fchkdict['structure/positions']   = fchk.get_optimization_coordinates()/angstrom
-        fchkdict['generic/positions']     = fchk.get_optimization_coordinates()/angstrom
-        fchkdict['generic/energy_tot']    = fchk.get_optimization_energies()/electronvolt
-        fchkdict['generic/forces']        = fchk.get_optimization_gradients()/(electronvolt/angstrom) * -1
+            fchkdict['structure/positions']   = opt_coords/angstrom
+        fchkdict['generic/positions']     = opt_coords/angstrom
+        fchkdict['generic/energy_tot']    = opt_energies/electronvolt
+        fchkdict['generic/forces']        = opt_gradients/(electronvolt/angstrom) * -1
+        if irc_path is not None:
+            fchkdict['structure/irc_path'] = irc_path
+
 
     if fchkdict['jobtype'] == 'freq':
         fchkdict['structure/positions']   = fchk.fields.get('Current cartesian coordinates').reshape([1,-1, 3])/angstrom
