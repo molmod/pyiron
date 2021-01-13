@@ -409,7 +409,7 @@ class Gaussian(GenericDFTJob):
         assert self.get('output/jobtype')=='scan'
 
         if plot_energy:
-            energies = self.get('output/structure/scan/p{}/energies'.format(index))
+            energies = self.get('output/structure/scan/energies/p{}'.format(index))
             pt.clf()
             pt.plot(energies,'bo--')
             pt.xlabel('Opt steps')
@@ -418,7 +418,7 @@ class Gaussian(GenericDFTJob):
 
 
         # Create the trajectory object
-        positions = self.get('output/structure/scan/p{}/positions'.format(index))
+        positions = self.get('output/structure/scan/positions/p{}'.format(index))
         trajectory = Trajectory(positions[::stride], self.structure,  indices=self.structure.indices)
 
         try:
