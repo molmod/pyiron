@@ -391,7 +391,7 @@ class Gaussian(GenericDFTJob):
         pt.show()
 
 
-def animate_scan(self,index,spacefill=True,stride=1,center_of_mass=False,particle_size=0.5,plot_energy=False):
+    def animate_scan(self,index,spacefill=True,stride=1,center_of_mass=False,particle_size=0.5,plot_energy=False):
         '''
         Animates the job if a trajectory is present
 
@@ -437,7 +437,6 @@ def animate_scan(self,index,spacefill=True,stride=1,center_of_mass=False,particl
                 cells=cells[::stride],
                 indices=indices[::stride]
             )
-
 
         try:
             import nglview
