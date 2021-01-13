@@ -409,7 +409,7 @@ class Gaussian(GenericDFTJob):
         assert self.get('output/jobtype')=='scan'
 
         if plot_energy:
-            energies = self.get('output/structure/scan/{}/energies'.format(index))
+            energies = self.get('output/structure/scan/p{}/energies'.format(index))
             pt.clf()
             pt.plot(energies,'bo--')
             pt.xlabel('Opt steps')
@@ -418,7 +418,7 @@ class Gaussian(GenericDFTJob):
 
 
         # Create the trajectory object
-        positions = self.get('output/structure/scan/{}/positions'.format(index))
+        positions = self.get('output/structure/scan/p{}/positions'.format(index))
         trajectory = Trajectory(positions[::stride], self.structure,  indices=self.structure.indices)
 
         try:
@@ -677,9 +677,9 @@ def fchk2dict(fchk):
             gradients = np.reshape(fchk.fields.get('Opt point {:7d} Gradient at each geome'.format(i+1)),(num, len(fchkdict['structure/numbers']), 3))
 
             # Store each scan in output h5
-            fchkdict['structure/scan/positions/{}'.format(i)] = coords/angstrom
-            fchkdict['structure/scan/energies/{}'.format(i)] = energies/electronvolt
-            fchkdict['structure/scan/gradients/{}'.format(i)] = gradients/(electronvolt/angstrom) * -1
+            fchkdict['structure/scan/positions/p{}'.format(i)] = coords/angstrom
+            fchkdict['structure/scan/energies/p{}'.format(i)] = energies/electronvolt
+            fchkdict['structure/scan/gradients/p{}'.format(i)] = gradients/(electronvolt/angstrom) * -1
 
             # Load final state for every frame as final trajectory
             opt_coords[i] = coords[-1]
