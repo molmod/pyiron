@@ -672,9 +672,9 @@ def fchk2dict(fchk):
 
         for i,num in enumerate(num_frames_per_point):
             # Load every scan point
-            coords = np.reshape(fchk.fields.get('Opt point       {} Geometries'.format(i+1)),(num, len(fchkdict['structure/numbers']), 3))
-            energies = fchk.fields.get('Opt point       {} Results for each geome'.format(i+1))[::2]
-            gradients = np.reshape(fchk.fields.get('Opt point       {} Gradient at each geome'.format(i+1)),(num, len(fchkdict['structure/numbers']), 3))
+            coords = np.reshape(fchk.fields.get('Opt point {:7d} Geometries'.format(i+1)),(num, len(fchkdict['structure/numbers']), 3))
+            energies = fchk.fields.get('Opt point {:7d} Results for each geome'.format(i+1))[::2]
+            gradients = np.reshape(fchk.fields.get('Opt point {:7d} Gradient at each geome'.format(i+1)),(num, len(fchkdict['structure/numbers']), 3))
 
             # Store each scan in output h5
             fchkdict['structure/scan/positions/{}'.format(i)] = coords/angstrom
