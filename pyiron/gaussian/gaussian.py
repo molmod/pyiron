@@ -10,7 +10,7 @@ from pyiron.base.settings.generic import Settings
 from pyiron.dft.job.generic import GenericDFTJob
 from pyiron.base.generic.parameters import GenericParameters
 from pyiron.atomistics.structure.atoms import Atoms
-from pyiron.atomistics.job import Trajectory
+from pyiron.atomistics.job.atomistics import Trajectory
 
 try:
     from molmod.io.fchk import FCHKFile
