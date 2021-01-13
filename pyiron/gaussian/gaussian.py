@@ -428,7 +428,7 @@ class Gaussian(GenericDFTJob):
                 "The animate() function requires the package nglview to be installed"
             )
 
-        animation = nglview.show_asetraj(trajectory(stride=stride, center_of_mass=center_of_mass))
+        animation = nglview.show_asetraj(trajectory)
         if spacefill:
             animation.add_spacefill(radius_type="vdw", scale=0.5, radius=particle_size)
             animation.remove_ball_and_stick()
