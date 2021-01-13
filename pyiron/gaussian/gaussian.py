@@ -63,7 +63,7 @@ class Gaussian(GenericDFTJob):
                       'title' : self.input['title'],
                       'spin_mult': self.input['spin_mult'],
                       'charge': self.input['charge'],
-                      'gic': self.input['gic'],
+                      'suffix': self.input['suffix'],
                       'bsse_idx': self.input['bsse_idx'],
                       'spin_orbit_states': self.input['spin_orbit_states'],
                       'symbols': self.structure.get_chemical_symbols().tolist(),
@@ -390,6 +390,10 @@ class Gaussian(GenericDFTJob):
         pt.show()
 
 
+    def animate_gic(self,index):
+        return
+
+
 class GaussianInput(GenericParameters):
     def __init__(self, input_file_name=None):
         super(GaussianInput, self).__init__(input_file_name=input_file_name, table_name="input_inp", comment_char="#")
@@ -446,6 +450,9 @@ def write_input(input_dict,working_directory='.'):
     else:
         settings = {}
 
+    if input_dict['suffix'] is not None:
+        input_dict['suffix'] = input_dict['suffix'].strip() # remove leading and trailing whitespaces
+
     verbosity_dict={'low':'t','normal':'n','high':'p'}
     if not input_dict['verbosity'] is None:
         verbosity  = input_dict['verbosity']
@@ -464,8 +471,7 @@ def write_input(input_dict,working_directory='.'):
         assert sum(set(input_dict['bsse_idx'])) == (max(input_dict['bsse_idx'])*(max(input_dict['bsse_idx']) + 1))/2
 
     if 'geom' in settings_keys and 'addgic' in settings['geom']:
-        assert input_dict['gic'] is not None
-        input_dict['gic'] = input_dict['gic'].strip() # remove leading and trailing whitespaces
+        assert input_dict['suffix'] is not None
 
 
     # Parse settings
@@ -480,6 +486,30 @@ def write_input(input_dict,working_directory='.'):
     lot_line = "".join(lot.lower().split())
     if 'spin' in lot_line and not 'nroot' in lot_line:
         lot_line = lot_line[:-1] + ',nroot=1)' # add the nroot option if it is not given
+
+    # If CAS calculation create suffix
+    if 'cas' in lot_line:
+        if input_dict['suffix'] is None:
+            input_dict['suffix'] = ""
+        else:
+            input_dict['suffix']+= '\n\n' # separation between provided suffix and cas suffix
+
+        if 'nroot' in lot_line:
+            nroot = int(re.search(r'nroot=\s*(\d+)', lot_line).group(1))
+            weights = [np.round(1./nroot,2) for i in range(nroot)]
+            if not sum(weights) == 1:
+                weights[-1] = np.round(1-sum(weights[:-1]),2)
+
+            input_dict['suffix'] += " ".join([str(w) for w in weights])
+            input_dict['suffix'] += '\n\n'
+
+        if 'spin' in lot_line:
+            assert input_dict['spin_orbit_states'] is not None
+            assert len(input_dict['spin_orbit_states']) == 2
+            assert all(isinstance(state, int) for state in input_dict['spin_orbit_states'])
+
+            input_dict['suffix'] += " ".join([str(state) for state in input_dict['spin_orbit_states']])
+            input_dict['suffix'] += '\n\n'
 
     # Write to file
     route_section = "#{} {}/{} {} {}\n\n".format(verbosity,lot_line,basis_set,jobtype,settings_string)
@@ -504,27 +534,9 @@ def write_input(input_dict,working_directory='.'):
                 f.write(" {}(Fragment={})\t{: 1.6f}\t{: 1.6f}\t{: 1.6f}\n".format(symbols[n],input_dict['bsse_idx'][n],p[0],p[1],p[2]))
             f.write('\n')
 
-        if 'geom' in settings_keys and 'addgic' in settings['geom']:
-            f.write(input_dict['gic'])
-            f.write('\n\n')
-
-        if 'cas' in lot_line:
-            if 'nroot' in lot_line:
-                nroot = int(re.search(r'nroot=\s*(\d+)', lot_line).group(1))
-                weights = [np.round(1./nroot,2) for i in range(nroot)]
-                if not sum(weights) == 1:
-                    weights[-1] = np.round(1-sum(weights[:-1]),2)
-                f.write(" ".join([str(w) for w in weights]))
-                f.write('\n\n')
-
-            if 'spin' in lot_line:
-                assert input_dict['spin_orbit_states'] is not None
-                assert len(input_dict['spin_orbit_states']) == 2
-                assert all(isinstance(state, int) for state in input_dict['spin_orbit_states'])
-
-                f.write(" ".join([str(state) for state in input_dict['spin_orbit_states']]))
-                f.write('\n\n')
-        f.write('\n')
+        if input_dict['suffix'] is not None:
+            f.write(input_dict['suffix'])
+        f.write('\n\n')
 
 
 # we could use theochem iodata, should be more robust than molmod.io
@@ -535,9 +547,9 @@ def fchk2dict(fchk):
 
     if not fchk.command.lower() in ['sp','fopt','freq','fts','popt','pts','fsaddle','psaddle','force','scan','lst','stability','mixed']:
         raise NotImplementedError('The output parsing for your selected jobtype is not yet implemented. Our apologies.')
-    if fchk.command.lower() in ['force','scan','lst','stability','mixed']:
+    if fchk.command.lower() in ['force','lst','stability','mixed']:
         raise NotImplementedError('The output parsing for your selected jobtype is not yet implemented. If you require this jobtype please let us know.')
-    if fchk.command.lower() in ['fts','popt','pts','fsaddle','psaddle']:
+    if fchk.command.lower() in ['fts','popt','pts','fsaddle','psaddle','scan']:
         warnings.warn('NOTE: this jobtype is newly implemented. If certain output data is missing from the job output, let us know and we will patch it.')
 
     # Basic information
@@ -591,6 +603,33 @@ def fchk2dict(fchk):
         fchkdict['generic/forces']        = opt_gradients/(electronvolt/angstrom) * -1
         if irc_path is not None:
             fchkdict['structure/irc_path'] = irc_path
+
+    if fchkdict['jobtype'] == 'scan':
+        num_frames_per_point =  fchk.fields.get('Optimization Number of geometries')
+
+        opt_coords = np.zeros(len(num_frames_per_point),len(fchkdict['structure/numbers']),3)
+        opt_energies = np.zeros(len(num_frames_per_point),len(fchkdict['structure/numbers']))
+        opt_gradients = np.zeros(len(num_frames_per_point),len(fchkdict['structure/numbers']),3)
+
+        for i,num in enumerate(num_frames_per_point):
+            # Load every scan point
+            coords = np.reshape(fchk.fields.get('Opt point       {} Geometries'.format(i)),(num, len(fchkdict['structure/numbers']), 3))
+            energies = fchk.fields.get('Opt point       {} Results for each geome'.format(i))[::2]
+            gradients = np.reshape(fchk.fields.get('Opt point       {} Gradient at each geome'.format(i)),(num, len(fchkdict['structure/numbers']), 3))
+
+            # Store each scan in output h5
+            fchkdict['structure/gic/geometries/{}'.format(i)] = coords/angstrom
+            fchkdict['structure/gic/energies/{}'.format(i)] = energies/electronvolt
+            fchkdict['structure/gic/gradients/{}'.format(i)] = gradients/(electronvolt/angstrom) * -1
+
+            # Load final state for every frame as final trajectory
+            opt_coords[i] = coords[-1]
+            opt_energies[i] = energies[-1]
+            opt_gradients[i] = gradients[-1]
+
+        fchkdict['generic/positions']     = opt_coords/angstrom
+        fchkdict['generic/energy_tot']    = opt_energies/electronvolt
+        fchkdict['generic/forces']        = opt_gradients/(electronvolt/angstrom) * -1
 
 
     if fchkdict['jobtype'] == 'freq':
