@@ -10,6 +10,7 @@ from pyiron.base.settings.generic import Settings
 from pyiron.dft.job.generic import GenericDFTJob
 from pyiron.base.generic.parameters import GenericParameters
 from pyiron.atomistics.structure.atoms import Atoms
+from pyiron.atomistics.job import Trajectory
 
 try:
     from molmod.io.fchk import FCHKFile
@@ -390,8 +391,66 @@ class Gaussian(GenericDFTJob):
         pt.show()
 
 
-    def animate_gic(self,index):
-        return
+    def animate_scan(self,index,stride=1,particle_size=0.5,plot_energy=False):
+        '''
+        Animates the job if a trajectory is present
+
+        Args:
+            index (int): index of the frame in the scan trajectory
+            spacefill (bool):
+            stride (int): show animation every stride [::stride]
+                          use value >1 to make animation faster
+                           default=1
+
+        Returns:
+            animation: nglview IPython widget
+
+        '''
+        assert self.get('output/jobtype')=='scan'
+
+        if plot_energy:
+            energies = self.get('output/structure/scan/{}/energies'.format(index))
+            pt.clf()
+            pt.plot(energies,'bo--')
+            pt.xlabel('Opt steps')
+            pt.ylabel('Total energy [a.u.]')
+            pt.show()
+
+
+        # Create the trajectory object
+        positions = self.get('output/structure/scan/{}/positions'.format(index))
+        trajectory = Trajectory(positions[::stride], self.structure,  indices=self.structure.indices)
+
+        try:
+            import nglview
+        except ImportError:
+            raise ImportError(
+                "The animate() function requires the package nglview to be installed"
+            )
+
+        animation = nglview.show_asetraj(trajectory(stride=stride, center_of_mass=center_of_mass))
+        if spacefill:
+            animation.add_spacefill(radius_type="vdw", scale=0.5, radius=particle_size)
+            animation.remove_ball_and_stick()
+        else:
+            animation.add_ball_and_stick()
+        return animation
+
+
+    def get_scan_structure(self,index,step=-1):
+        '''
+        Return the structure from scan 'index' at optimization step 'frame'
+
+        Args:
+            index (int): index of the frame in the scan trajectory
+            step (int): index of the optimization step in this frame
+        '''
+
+        structure = self.structure.copy()
+        structure.positions = self.get('output/structure/scan/{}/positions'.format(index))[step]
+        return structure
+
+
 
 
 class GaussianInput(GenericParameters):
@@ -613,14 +672,14 @@ def fchk2dict(fchk):
 
         for i,num in enumerate(num_frames_per_point):
             # Load every scan point
-            coords = np.reshape(fchk.fields.get('Opt point       {} Geometries'.format(i)),(num, len(fchkdict['structure/numbers']), 3))
-            energies = fchk.fields.get('Opt point       {} Results for each geome'.format(i))[::2]
-            gradients = np.reshape(fchk.fields.get('Opt point       {} Gradient at each geome'.format(i)),(num, len(fchkdict['structure/numbers']), 3))
+            coords = np.reshape(fchk.fields.get('Opt point       {} Geometries'.format(i+1)),(num, len(fchkdict['structure/numbers']), 3))
+            energies = fchk.fields.get('Opt point       {} Results for each geome'.format(i+1))[::2]
+            gradients = np.reshape(fchk.fields.get('Opt point       {} Gradient at each geome'.format(i+1)),(num, len(fchkdict['structure/numbers']), 3))
 
             # Store each scan in output h5
-            fchkdict['structure/gic/geometries/{}'.format(i)] = coords/angstrom
-            fchkdict['structure/gic/energies/{}'.format(i)] = energies/electronvolt
-            fchkdict['structure/gic/gradients/{}'.format(i)] = gradients/(electronvolt/angstrom) * -1
+            fchkdict['structure/scan/positions/{}'.format(i)] = coords/angstrom
+            fchkdict['structure/scan/energies/{}'.format(i)] = energies/electronvolt
+            fchkdict['structure/scan/gradients/{}'.format(i)] = gradients/(electronvolt/angstrom) * -1
 
             # Load final state for every frame as final trajectory
             opt_coords[i] = coords[-1]
