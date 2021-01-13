@@ -529,6 +529,11 @@ def write_input(input_dict,working_directory='.'):
         # Check if it only contains conseqcutive numbers (sum of set should be n*(n+1)/2)
         assert sum(set(input_dict['bsse_idx'])) == (max(input_dict['bsse_idx'])*(max(input_dict['bsse_idx']) + 1))/2
 
+    if 'empiricaldispersion' in settings_keys:
+        if verbosity in ['t','n']:
+            warnings.warn('You can only use the EmpiricalDispersion option with a "high" verbosity. This has been automatically updated.')
+            verbosity = 'p'
+
     if 'geom' in settings_keys and 'addgic' in settings['geom']:
         assert input_dict['suffix'] is not None
 
