@@ -391,7 +391,7 @@ class Gaussian(GenericDFTJob):
         pt.show()
 
 
-    def animate_scan(self,index,stride=1,particle_size=0.5,plot_energy=False):
+def animate_scan(self,index,spacefill=True,stride=1,center_of_mass=False,particle_size=0.5,plot_energy=False):
         '''
         Animates the job if a trajectory is present
 
@@ -401,6 +401,7 @@ class Gaussian(GenericDFTJob):
             stride (int): show animation every stride [::stride]
                           use value >1 to make animation faster
                            default=1
+            center_of_mass (list/numpy.ndarray): The center of mass
 
         Returns:
             animation: nglview IPython widget
@@ -419,7 +420,24 @@ class Gaussian(GenericDFTJob):
 
         # Create the trajectory object
         positions = self.get('output/structure/scan/positions/p{}'.format(index))
-        trajectory = Trajectory(positions[::stride], self.structure,  indices=self.structure.indices)
+        indices = self.output.indices
+
+        max_pos = np.max(np.max(positions, axis=0), axis=0)
+        max_pos[np.abs(max_pos) < 1e-2] = 10
+        cell = np.eye(3) * max_pos
+        cells = np.array([cell] * len(positions))
+
+        if len(positions) != len(cells):
+            raise ValueError("The positions must have the same length as the cells!")
+
+        trajectory = Trajectory(
+                positions[::stride],
+                self.structure.get_parent_basis(),
+                center_of_mass=center_of_mass,
+                cells=cells[::stride],
+                indices=indices[::stride]
+            )
+
 
         try:
             import nglview
@@ -447,10 +465,8 @@ class Gaussian(GenericDFTJob):
         '''
 
         structure = self.structure.copy()
-        structure.positions = self.get('output/structure/scan/{}/positions'.format(index))[step]
+        structure.positions = self.get('output/structure/scan/positions/p{}'.format(index))[step]
         return structure
-
-
 
 
 class GaussianInput(GenericParameters):
