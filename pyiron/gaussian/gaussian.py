@@ -54,7 +54,7 @@ class Gaussian(GenericDFTJob):
 
 
     def write_input(self):
-        input_dict = {'mem': self.server.memory_limit,
+        input_dict = {'mem': self.server.memory_limit, # per core memory
                       'cores': self.server.cores,
                       'verbosity': self.input['verbosity'],
                       'lot': self.input['lot'],
@@ -501,7 +501,7 @@ def write_input(input_dict,working_directory='.'):
         mem = input_dict['mem'] + 'B' * (input_dict['mem'][-1]!='B') # check if string ends in bytes
         # convert pmem to mem
         cores = input_dict['cores']
-        nmem = str(int(re.findall("\d+", mem)[0]) * cores)
+        nmem = str((int(re.findall("\d+", mem)[0]) - 100) * cores) # shave off 100MB per core since Gaussian overextends its memory usage
         mem_unit = re.findall("[a-zA-Z]+", mem)[0]
         mem = nmem+mem_unit
     else:
