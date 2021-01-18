@@ -199,7 +199,7 @@ class QChem(GenericDFTJob):
         else:
             self.input['sections']['opt'].update(opt)
 
-    def set_connectivity(self,index,indices):
+    def set_connectivity(self, index, indices):
         '''
             Function to set the atom connectivity for atom index when the delocalized internal coordinates fail,
             e.g. in systems with long, weak bonds or in certain transition states where parts of the molecule are rearranging or dissociating
@@ -222,7 +222,7 @@ class QChem(GenericDFTJob):
             self.input['sections']['opt']['connect'].update(connect)
 
 
-    def calc_minimize(self, electronic_steps=None, ionic_steps=None, ionic_energy_tolerance=None, ionic_force_tolerance=None, algorithm):
+    def calc_minimize(self, electronic_steps=None, ionic_steps=None, ionic_energy_tolerance=None, ionic_force_tolerance=None, algorithm=None):
         '''
             Function to setup the hamiltonian to perform ionic relaxations using DFT. The convergence goal can be set using
             either the iconic_energy as an limit for fluctuations in energy or the iconic_forces.
@@ -268,7 +268,7 @@ class QChem(GenericDFTJob):
         )
 
 
-    def calc_static(self, electronic_steps=None,algorithm=None):
+    def calc_static(self, electronic_steps=None, algorithm=None):
         '''
             Function to setup the hamiltonian to perform static SCF DFT runs
 
@@ -318,7 +318,7 @@ charge 0
         self.load_string(input_str)
 
 
-def write_input(input_dict,working_directory='.'):
+def write_input(input_dict, working_directory='.'):
     # Comments can be written with ! in Gaussian
     # Load dictionary
     lot          = input_dict['lot']
@@ -356,7 +356,7 @@ def write_input(input_dict,working_directory='.'):
         for k,v in input_dict['settings']:
             rem_parameters[k.upper()] = v
 
-    def write_section(f,name,parameter_dict,start=None, end=None):
+    def write_section(f, name, parameter_dict, start=None, end=None):
         if start is None:
             start = '${}'.format(name.lower())
         if end is None:
