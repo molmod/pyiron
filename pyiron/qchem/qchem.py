@@ -107,8 +107,6 @@ class QChem(GenericDFTJob):
         '''
         self.input['jobtype'] = 'PES-SCAN'
 
-        sections = {}
-
         def sanity_check(arg):
             if not isinstance(arg,list):
                 arg = [arg]
@@ -124,10 +122,13 @@ class QChem(GenericDFTJob):
         if not all(isinstance(i, list) for i in indices):
             indices = [indices]
 
-        # Create opt section
+        # Create scan section
+        scan = {}
         for n,idx in enumerate(indices):
             assert len(idx)==ic_len[types[n]]
-            opt[types[n]] = [i-1 for i in idx] + list(limits[n]) + [steps[n]] # qchem starts counting from 1
+            scan[types[n]] = [i-1 for i in idx] + list(limits[n]) + [steps[n]] # qchem starts counting from 1
+
+        sections = {'scan':scan}
 
         if not isinstance(self.input['sections'],dict):
             self.input['sections'] = sections
@@ -409,7 +410,7 @@ def write_input(input_dict, working_directory='.'):
                     f.write('--\n')
                     f.write('{} {}\n'.format(charges[bsse_idx_loc[n]+1],mults[bsse_idx_loc[n]+1]))
                 f.write(" {}\t{: 1.6f}\t{: 1.6f}\t{: 1.6f}\n".format(symbols[n],p[0],p[1],p[2]))
-        f.write('$end\n')
+        f.write('$end\n\n')
 
         if input_dict['sections'] is not None:
             for sec_name, sec_dict in input_dict['sections'].items():
