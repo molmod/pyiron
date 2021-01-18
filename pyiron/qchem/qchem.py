@@ -378,7 +378,7 @@ def write_input(input_dict,working_directory='.'):
     if not input_dict['bsse_idx'] is None:
         # sanity check
         assert input_dict['jobtype'].lower()=='bsse'
-        bsse_idx = np.asarray(input_dict['bsse_idx')
+        bsse_idx = np.asarray(input_dict['bsse_idx'])
         # Check if subsequent elements maximally differ 1 and never decrease
         assert np.all(np.abs(bsse_idx[1:]-bsse_idx[:-1])<=1) and np.all(bsse_idx[1:]-bsse_idx[:-1]>=0)
         bsse_idx = set(input_dict['bsse_idx'])
