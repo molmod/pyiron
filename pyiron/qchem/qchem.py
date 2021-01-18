@@ -43,7 +43,7 @@ class QChem(GenericDFTJob):
         super(QChem, self).__init__(project, job_name)
         self.__name__ = "QChem"
         self._executable_activate(enforce=True)
-        self.input = QchemInput()
+        self.input = QChemInput()
 
 
     def write_input(self):
