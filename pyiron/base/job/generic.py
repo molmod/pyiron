@@ -1050,6 +1050,7 @@ class GenericJob(JobCore):
         - ‘QuickFF’:
         - ‘US’:
         - ‘Horton’:
+        - ‘QChem’:
 
         Args:
             job_type (str): job type can be ['StructureContainer’, ‘StructurePipeline’, ‘AtomisticExampleJob’,
@@ -1060,7 +1061,7 @@ class GenericJob(JobCore):
                                              ‘ConvergenceEncutParallel’, ‘ConvergenceKpointParallel’, ’PhonopyMaster’,
                                              ‘DefectFormationEnergy’, ‘LammpsASE’, ‘PipelineMaster’,
                                              ’TransformationPath’, ‘ThermoIntEamQh’, ‘ThermoIntDftEam’, ‘ScriptJob’,
-                                             ‘ListMaster', ‘Gaussian’, ‘Yaff’, ‘QuickFF’, ‘US’, ‘Horton’]
+                                             ‘ListMaster', ‘Gaussian’, ‘Yaff’, ‘QuickFF’, ‘US’, ‘Horton’, ‘QChem’]
             job_name (str): name of the job
 
         Returns:

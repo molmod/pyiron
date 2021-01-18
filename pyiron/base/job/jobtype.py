@@ -42,6 +42,7 @@ JOB_CLASS_DICT = {
     "Murnaghan": "pyiron.atomistics.master.murnaghan",
     "MurnaghanDFT": "pyiron.dft.master.murnaghan_dft",
     "PhonopyJob": "pyiron.atomistics.master.phonopy",
+    "QChem": "pyiron.qchem.qchem",
     "QuickFF": "pyiron.quickff.quickff",
     "ScipyMinimizer": "pyiron.interactive.scipy_minimizer",
     "ScriptJob": "pyiron.base.job.script",
