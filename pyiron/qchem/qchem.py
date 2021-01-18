@@ -22,16 +22,6 @@ except ImportError:
     pass
 
 
-__author__ = "Sander Borgmans"
-__copyright__ = "Copyright 2019, Max-Planck-Institut für Eisenforschung GmbH - " \
-                "- Computational Materials Design (CM) Department"
-__version__ = "1.0"
-__maintainer__ = ""
-__email__ = ""
-__status__ = "trial"
-__date__ = "Jan 15, 2021"
-
-
 
 s = Settings()
 
@@ -126,7 +116,7 @@ class QChem(GenericDFTJob):
         scan = {}
         for n,idx in enumerate(indices):
             assert len(idx)==ic_len[types[n]]
-            scan[types[n]] = [i-1 for i in idx] + list(limits[n]) + [steps[n]] # qchem starts counting from 1
+            scan[types[n]+'\t'+'\t'.join([str(i+1) for i in idx])] = list(limits[n]) + [steps[n]] # qchem starts counting from 1, indices are part of key to make it unique
 
         sections = {'scan':scan}
 
@@ -134,7 +124,7 @@ class QChem(GenericDFTJob):
             self.input['sections'] = sections
         else:
             if 'scan' in self.input['sections']:
-                warning.warn('There was already a scan section. This has been overwritten!')
+                warnings.warn('There was already a scan section. This has been overwritten!')
             self.input['sections'].update(sections)
 
 
@@ -142,7 +132,7 @@ class QChem(GenericDFTJob):
         '''
             Function to assign constraints for geometric optimization.
         '''
-        if not self.input['jobtype'].upper()=='OPT':
+        if self.input['jobtype'] is None or not self.input['jobtype'].upper()=='OPT':
             warnings.warn('Constraints are only sensical when used in combination with an optimization job. If you did not yet set the jobtype, please do so.')
 
         def sanity_check(arg):
@@ -161,7 +151,7 @@ class QChem(GenericDFTJob):
         constraint = {}
         for n,idx in enumerate(indices):
             assert len(idx)==ic_len[types[n]]
-            constraint[types[n]] = [i-1 for i in idx] + [values[n]]  # qchem starts counting from 1
+            constraint[types[n]+'\t'+'\t'.join([str(i+1) for i in idx])] = values[n]  # qchem starts counting from 1, indices are part of key to make it unique
 
         # Create fixed section in the opt section
         opt = {'constraint':constraint}
@@ -179,7 +169,7 @@ class QChem(GenericDFTJob):
             Freeze atoms by their indices, specifying which of the dimensions have to stay fixed.
             Fixes the x,y and z coordinate by default for every index.
         '''
-        if not self.input['jobtype'].upper()=='OPT':
+        if self.input['jobtype'] is None or not self.input['jobtype'].upper()=='OPT':
             warnings.warn('Freezing atoms is only sensical when used in combination with an optimization job. If you did not yet set the jobtype, please do so.')
 
         if dimensions is None:
@@ -187,7 +177,7 @@ class QChem(GenericDFTJob):
 
         fixed = {}
         for n,idx in enumerate(indices):
-            fixed[str(idx-1)] = dimensions[n]
+            fixed[str(idx+1)] = dimensions[n] # qchem starts counting from 1
 
         # Create fixed section in the opt section
         opt = {'fixed':fixed}
@@ -207,7 +197,7 @@ class QChem(GenericDFTJob):
         '''
 
         connect = {}
-        connect[index] = [len(indices)] + indices
+        connect[str(index+1)] = [len(indices)] + [i+1 for i in indices] # qchem starts counting from 1
 
         # Create connect section in the opt section
         opt = {'connect':connect}
@@ -217,7 +207,7 @@ class QChem(GenericDFTJob):
             self.input['sections'] = sections
         elif 'opt' not in self.input['sections']:
             self.input['sections'].update(sections)
-        elif 'connect' not in self.input['sections']['connect']:
+        elif 'connect' not in self.input['sections']['opt']:
             self.input['sections']['opt'].update(opt)
         else:
             self.input['sections']['opt']['connect'].update(connect)
@@ -382,7 +372,7 @@ def write_input(input_dict, working_directory='.'):
         bsse_idx = np.asarray(input_dict['bsse_idx'])
         # Check if subsequent elements maximally differ 1 and never decrease
         assert np.all(np.abs(bsse_idx[1:]-bsse_idx[:-1])<=1) and np.all(bsse_idx[1:]-bsse_idx[:-1]>=0)
-        bsse_idx = set(input_dict['bsse_idx'])
+        bsse_idx_set = set(input_dict['bsse_idx'])
 
         # Find first occurence of every index
         bsse_idx_loc = {list(input_dict['bsse_idx']).index(n):n for n in bsse_idx}
@@ -422,5 +412,7 @@ def write_input(input_dict, working_directory='.'):
 def collect_output(output_file):
     # Read output
     output_dict = {}
+
+    # pymatgen has parser? new dependency!
 
     return output_dict
