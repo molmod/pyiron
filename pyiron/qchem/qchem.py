@@ -353,7 +353,7 @@ def write_input(input_dict, working_directory='.'):
 
     # Add all other options from the settings dict
     if input_dict['settings'] is not None:
-        for k,v in input_dict['settings']:
+        for k,v in input_dict['settings'].items():
             rem_parameters[k.upper()] = v
 
     def write_section(f, name, parameter_dict, start=None, end=None):
