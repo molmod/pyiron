@@ -412,7 +412,7 @@ def write_input(input_dict, working_directory='.'):
         f.write('$end\n')
 
         if input_dict['sections'] is not None:
-            for sec_name, sec_dict in input_dict['sections']:
+            for sec_name, sec_dict in input_dict['sections'].items():
                 write_section(f,sec_name,sec_dict)
 
         f.write('\n\n')
