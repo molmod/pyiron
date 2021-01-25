@@ -938,24 +938,24 @@ class Yaff(AtomisticGenericJob):
                 shell=True,
             )
 
-        def check_ffpars(self):
-            ffpars = self.input['ffpars'].split('\n')
+    def check_ffpars(self):
+        ffpars = self.input['ffpars'].split('\n')
 
-            # Check DIELECTRIC
-            count = ffpars.count('FIXQ:DIELECTRIC 1.0')
-            if count>1:
-                warnings.warn('Two instances of "FIXQ:DIELECTRIC 1.0" were found, and one will be deleted.')
-                idx = ffpars.index('FIXQ:DIELECTRIC 1.0')
-                del ffpars[idx]
+        # Check DIELECTRIC
+        count = ffpars.count('FIXQ:DIELECTRIC 1.0')
+        if count>1:
+            warnings.warn('Two instances of "FIXQ:DIELECTRIC 1.0" were found, and one will be deleted.')
+            idx = ffpars.index('FIXQ:DIELECTRIC 1.0')
+            del ffpars[idx]
 
-            # Check UNITS
-            units = {}
-            for n,line in enumerate(ffpars):
-                if 'UNIT' in line:
-                    spl = line.split()
-                    unit_tuple = (spl[0],spl[1])
-                    if not unit_tuple in units:
-                        units[unit_tuple] = spl[2]
-                    else:
-                        if not parse_unit(units[unit_tuple]) == parse_unit(spl[2]): # from molmod.units
-                            raise ValueError('There was a conflict with your force field parameter units, namely for {} which was defined as {} both {}. Make sure that every unit unique.'.format(unit_tuple,spl[2],units[unit_tuple]))
+        # Check UNITS
+        units = {}
+        for n,line in enumerate(ffpars):
+            if 'UNIT' in line:
+                spl = line.split()
+                unit_tuple = (spl[0],spl[1])
+                if not unit_tuple in units:
+                    units[unit_tuple] = spl[2]
+                else:
+                    if not parse_unit(units[unit_tuple]) == parse_unit(spl[2]): # from molmod.units
+                        raise ValueError('There was a conflict with your force field parameter units, namely for {} which was defined as {} both {}. Make sure that every unit unique.'.format(unit_tuple,spl[2],units[unit_tuple]))
