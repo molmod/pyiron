@@ -289,12 +289,8 @@ class US(AtomisticParallelMaster):
         os.chmod(wham_script, st.st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH) # executable by everyone
 
         # execute wham
-        out = subprocess.check_output(
-                'exec '+path+'wham_job.sh',
-                stderr=subprocess.STDOUT,
-                universal_newlines=True,
-                shell=True,
-            )
+        command = ['exec', wham_script]
+        out = s._queue_adapter._adapter._execute_command(command, split_output=False, shell=True)
 
     def get_structure(self, iteration_step=-1):
         '''
