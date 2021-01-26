@@ -931,12 +931,8 @@ class Yaff(AtomisticGenericJob):
         os.chmod(plumed_script, st.st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH) # executable by everyone
 
         # execute wham
-        out = subprocess.check_output(
-                'exec '+path+'plumed_job.sh',
-                stderr=subprocess.STDOUT,
-                universal_newlines=True,
-                shell=True,
-            )
+        command = ['exec', plumed_script]
+        out = s._queue_adapter._adapter._execute_command(command, split_output=False, shell=True)
 
     def check_ffpars(self):
         ffpars = self.input['ffpars'].split('\n')
