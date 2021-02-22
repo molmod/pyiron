@@ -10,6 +10,12 @@ from pyiron.base.master.parallel import JobGenerator
 from pyiron.atomistics.structure.atoms import Atoms
 
 
+try:
+    from plumed import Plumed
+except:
+    raise ImportError("Could not import the PLUMED python wrapper!")
+
+
 s = Settings()
 
 def get_wham_path():
@@ -38,21 +44,28 @@ class USJobGenerator(JobGenerator):
 
         # Create parameter list
         parameter_lst = []
-        for (loc,structure) in zip(self._job.input['cv_grid'],self._job.structures):
-            parameter_lst.append([np.round(loc,5), structure])
+        for n,loc in enumerate(self._job.input['cv_grid']):
+            parameter_lst.append([n, np.round(loc,5)])
         return parameter_lst
 
     @staticmethod
     def job_name(parameter):
-        if isinstance(parameter[0], list) or isinstance(parameter[0], np.ndarray):
-            return 'us_' + '__'.join([str(loc).replace('.', '_').replace('-', 'm') for loc in parameter[0]])
+        if isinstance(parameter[1], list) or isinstance(parameter[1], np.ndarray):
+            return 'us_' + '__'.join([str(loc).replace('.', '_').replace('-', 'm') for loc in parameter[1]])
         else:
-            return 'us_' + str(parameter[0]).replace('.', '_').replace('-', 'm')
+            return 'us_' + str(parameter[1]).replace('.', '_').replace('-', 'm')
 
     def modify_job(self, job, parameter):
         # For now, no different kappa for different locs implementation!
         job.input['temp'] = self._job.input['temp']
-        job.structure = parameter[1]
+
+        if self._job.ref_job is not None:
+            job.structure = self._job.ref_job.get_structure(self._job.ref_job_idx[parameter[0]])
+        elif self._job.ref_f is not None:
+            job.structure = self._job.ref_f(self.ref_job.structure,parameter[1])
+        else:
+            raise ValueError('Please specify the structures through generate_structures_traj() or generate_structures_ref().')
+
         job.set_us(self._job.input['cvs'], self._job.input['kappa'], parameter[0], fn_colvar='COLVAR', stride=self._job.input['stride'], temp=self._job.input['temp'])
         return job
 
@@ -83,7 +96,10 @@ class US(AtomisticParallelMaster):
         self.input['periodicity'] = (None , 'periodicity of cv(s)')
         self.input['tol']         = (0.00001 , 'WHAM converges if free energy changes < tol')
 
-        self.structures = None   # list with structures corresponding to grid points
+        self.ref_job = None   # reference job with trajectory
+        self.ref_job_idx = None   # idx which are selected by generate_structures_traj
+        self.ref_f = None   # function to transform template structure to structure with correct cv
+
         self._job_generator = USJobGenerator(self)
 
     def set_us(self,cvs,kappa,cv_grid,stride=10,temp=300*kelvin,h_min=None,h_max=None,h_bins=None,periodicity=None,tol=0.00001):
@@ -181,10 +197,6 @@ class US(AtomisticParallelMaster):
         self.input['periodicity'] = periodicity
         self.input['tol']         = tol
 
-
-    def list_structures(self):
-        return self.structures
-
     def generate_structures_traj(self,job,cv_f):
         '''
             Generates structure list based on cv grid and cv function using the trajectory data from another job (e.g. MD or MTD job)
@@ -202,8 +214,8 @@ class US(AtomisticParallelMaster):
             idx[n] = np.argmin(np.linalg.norm(loc-cv,axis=-1))
             max_deviation = max(max_deviation,np.linalg.norm(loc-cv,axis=-1)[idx[n]])
         print('The largest deviation is equal to {}'.format(max_deviation))
-
-        return [job.get_structure(i) for i in idx]
+        self.ref_job = job
+        self.ref_job_idx = idx
 
     def generate_structures_ref(self,f):
         '''
@@ -215,10 +227,7 @@ class US(AtomisticParallelMaster):
         '''
 
         assert self.ref_job.structure is not None
-        structures = []
-        for loc in self.input['cv_grid']:
-            structures.append(f(self.ref_job.structure,loc))
-        return structures
+        self.ref_f = f
 
 
     def check_overlap(self):
@@ -310,23 +319,10 @@ class US(AtomisticParallelMaster):
         with self.project_hdf5.open('input') as hdf5_input:
             self.input.to_hdf(hdf5_input)
 
-        with self.project_hdf5.open('input/structures') as hdf5_input:
-            for n,(loc,structure) in enumerate(zip(self.input['cv_grid'],self.structures)):
-                #name = str(loc).replace('.', '_').replace('-', 'm') if isinstance(loc,(int,float)) else ','.join([str(l).replace('.', '_').replace('-', 'm') for l in loc])
-                name = 'cv' + str(n)
-                self.structure.to_hdf(hdf5_input,group_name=name)
-
     def from_hdf(self, hdf=None, group_name=None):
         super(US, self).from_hdf(hdf=hdf, group_name=group_name)
         with self.project_hdf5.open('input') as hdf5_input:
             self.input.from_hdf(hdf5_input)
-
-        self.structures = []
-        with self.project_hdf5.open('input/structures') as hdf5_input:
-            for n,loc in enumerate(self.input['cv_grid']):
-                #name = str(loc).replace('.', '_').replace('-', 'm') if isinstance(loc,(int,float)) else ','.join([str(l).replace('.', '_').replace('-', 'm') for l in loc])
-                name = 'cv' + str(n)
-                self.structures.append(Atoms().from_hdf(hdf5_input,group_name=name))
 
     def collect_output(self):
         def convert_val(val,unit=None):
