@@ -11,16 +11,14 @@ from pyiron.dft.job.generic import GenericDFTJob
 from pyiron.base.generic.parameters import GenericParameters
 from pyiron.atomistics.structure.atoms import Atoms
 from pyiron.atomistics.job.atomistic import Trajectory
+from pyiron.qchem.cclib_parser import QChem as QChem_parser
 
 try:
-    from molmod.io.fchk import FCHKFile
     from molmod.units import amu,angstrom,electronvolt,centimeter,kcalmol
     from molmod.constants import lightspeed
     from molmod.periodic import periodic
-    import tamkin
 except ImportError:
     pass
-
 
 
 s = Settings()
@@ -54,7 +52,7 @@ class QChem(GenericDFTJob):
 
 
     def collect_output(self):
-        output_dict = collect_output(output_file=os.path.join(self.working_directory, 'input.fchk'))
+        output_dict = collect_output(output_file=os.path.join(self.working_directory, 'job.out'))
         with self.project_hdf5.open("output") as hdf5_output:
             for k, v in output_dict.items():
                 hdf5_output[k] = v
@@ -290,6 +288,22 @@ class QChem(GenericDFTJob):
     def calc_md(self, temperature=None, n_ionic_steps=1000, time_step=None, n_print=100):
         raise NotImplementedError("calc_md() not implemented in QChem.")
 
+    def read_NMA(self):
+        '''
+            Reads the NMA output from the QChem .log file (they are already parsed)
+
+            Returns:
+                    IR frequencies, intensities and corresponding eigenvectors (modes).
+        '''
+        freqs = self.get('output/generic/nma/freqs') * (lightspeed/centimeter) # put into atomic units
+        ints = self.get('output/generic/nma/ir_intensities')
+        modes = self.get('output/generic/nma/modes') * angstrom # put into atomic units
+
+        #modes = np.array(modes).reshape(nrat,len(ints),3)
+        #modes = np.swapaxes(modes,0,1)
+
+        return freqs,ints,modes
+
 
 
 class QChemInput(GenericParameters):
@@ -318,6 +332,7 @@ def write_input(input_dict, working_directory='.'):
     charge       = input_dict['charge']
     symbols      = input_dict['symbols']
     pos          = input_dict['pos']
+
     assert pos.shape[0] == len(symbols)
 
     # Main settings dictionary
@@ -330,6 +345,10 @@ def write_input(input_dict, working_directory='.'):
         jobtype = input_dict['jobtype'].upper()
         #sanity check
         assert jobtype in ['SP','OPT','TS','FREQ','FORCE','RPATH','NMR','ISSC','BSSE','EDA','PES-SCAN']
+        if jobtype == 'FREQ':
+            if input_dict['settings'] is None:
+                input_dict['settings'] = {}
+            input_dict['settings'].update({'HESS_AND_GRAD':'TRUE'}) # otherwise gradient is not printed and this is required for FF derivations
     rem_parameters['JOBTYPE'] = jobtype
 
     # BASIS
@@ -341,6 +360,13 @@ def write_input(input_dict, working_directory='.'):
         rem_parameters['CORRELATION'] = lot[1]
     else:
         rem_parameters['METHOD'] = lot
+
+    # MEMORY
+    mem = input_dict['mem'] + 'B' * (input_dict['mem'][-1]!='B') # check if string ends in bytes
+    cores = input_dict['cores']
+    assert mem[-2:]=='MB' # later this should be converted to a function that takes care of the conversion to MB
+    nmem = str(int(int(re.findall("\d+", mem)[0]) * cores))
+    rem_parameters['MEM_TOTAL'] = nmem # memory in MBs
 
     # Add all other options from the settings dict
     if input_dict['settings'] is not None:
@@ -408,11 +434,68 @@ def write_input(input_dict, working_directory='.'):
 
         f.write('\n\n')
 
+def qcoutput2dict(qcoutput):
+    output_dict = {}
+
+    # Basic information
+    output_dict['jobtype']     = qcoutput.user_input['rem']['jobtype']
+
+    # Structure information
+    output_dict['structure/numbers']     = qcoutput.atomnos
+    output_dict['structure/masses']      = np.array([periodic[n].mass for n in qcoutput.atomnos])
+    output_dict['structure/charges']     = qcoutput.atomcharges['mulliken']
+    output_dict['structure/dipole']      = qcoutput.moments[1] # [0] is reference 0,0,0
+
+    output_dict['structure/dft/n_electrons']         = qcoutput.nelectrons
+    output_dict['structure/dft/n_alpha_electrons']   = qcoutput.nalpha
+    output_dict['structure/dft/n_beta_electrons']    = qcoutput.nbeta
+    output_dict['structure/dft/n_basis_functions']   = qcoutput.nbasis
+
+    # Orbital information
+    output_dict['structure/dft/alpha_orbital_e']     = qcoutput.moenergies[0]
+    output_dict['structure/dft/beta_orbital_e']      = qcoutput.moenergies[1] if len(qcoutput.moenergies)==2 else qcoutput.moenergies[0]
+
+    # Specific job information
+
+    # maybe we have to take into account possible energy deviations from scfenergies for the total energy?
+
+    if output_dict['jobtype']=='opt':
+        output_dict['structure/positions']   = qcoutput.converged_geometries[-1]
+        output_dict['generic/positions']     = qcoutput.converged_geometries
+        output_dict['generic/forces']        = qcoutput.grads/(electronvolt/angstrom)
+        output_dict['generic/energy_tot']    = qcoutput.scfenergies/electronvolt
+
+    if output_dict['jobtype']=='freq':
+        output_dict['structure/positions']   = qcoutput.converged_geometries
+        output_dict['generic/positions']     = qcoutput.converged_geometries
+        output_dict['generic/forces']        = -qcoutput.grads[-1]/(electronvolt/angstrom)
+        output_dict['generic/hessian']       = qcoutput.hessian/(electronvolt/angstrom**2)
+        output_dict['generic/energy_tot']    = qcoutput.scfenergies[-1]/electronvolt
+        output_dict['generic/nma/freqs']             = qcoutput.vibfreqs # in cm**-1
+        output_dict['generic/nma/force_constants']   = qcoutput.vibfconsts
+        output_dict['generic/nma/ir_intensities']    = qcoutput.vibirs
+        if hasattr(qcoutput,'vibramans'):
+            output_dict['generic/nma/raman_intensities'] = qcoutput.vibramans
+        output_dict['generic/nma/modes']             = qcoutput.vibdisps
+
+        # Thermochemistry
+        output_dict['structure/thermochemistry/enthalpy'] = qcoutput.enthalpy/electronvolt
+        output_dict['structure/thermochemistry/entropy_298K']  = qcoutput.entropy/electronvolt # entropy x temperature (298.15K)
+        output_dict['structure/thermochemistry/free_energy'] = qcoutput.freeenergy/electronvolt
+
+    if output_dict['jobtype']=='sp':
+        output_dict['structure/positions']   = qcoutput.converged_geometries
+        output_dict['generic/positions']     = qcoutput.converged_geometries
+        output_dict['generic/energy_tot']    = qcoutput.scfenergies[-1]/electronvolt
+
+    return output_dict
+
 
 def collect_output(output_file):
     # Read output
-    output_dict = {}
+    parser = QChem_parser(output_file)
 
-    # pymatgen has parser? new dependency!
+    # Translate to pyiron dict
+    output_dict = qcoutput2dict(parser.parse())
 
     return output_dict
