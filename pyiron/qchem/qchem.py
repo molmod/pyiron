@@ -459,7 +459,7 @@ def qcoutput2dict(qcoutput):
 
     # maybe we have to take into account possible energy deviations from scfenergies for the total energy?
 
-    if output_dict['jobtype']=='opt':
+    if output_dict['jobtype'] in ['opt', 'ts']:
         output_dict['structure/positions']   = qcoutput.converged_geometries[-1]
         output_dict['generic/positions']     = qcoutput.converged_geometries
         output_dict['generic/forces']        = qcoutput.grads/(electronvolt/angstrom)
