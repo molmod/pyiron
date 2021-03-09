@@ -23,6 +23,11 @@ except ImportError:
 
 s = Settings()
 
+# A master job could be defined to chain multiple qchem jobs with the internal @@@ functionality
+# In this way the 'read' options can be automatically inserted for the molecular structure
+# 1 job is performed but three dummy jobs are created to which the output is assigned
+# the output file should just be an appended version of the sequential jobs
+
 # Length dictionary for ICs
 ic_len = {'stre':2, 'bend':3, 'outp':4, 'tors':4, 'linc':4, 'linp':4}
 
@@ -32,11 +37,14 @@ class QChem(GenericDFTJob):
         self.__name__ = "QChem"
         self._executable_activate(enforce=True)
         self.input = QChemInput()
+        self.gpu_enabled = False
 
 
     def write_input(self):
         input_dict = {'mem': self.server.memory_limit, # per core memory
                       'cores': self.server.cores,
+                      'cluster': self.server.queue,
+                      'gpu_enabled': self.gpu_enabled,
                       'jobtype' : self.input['jobtype'],
                       'lot': self.input['lot'],
                       'basis_set': self.input['basis_set'],
@@ -77,6 +85,12 @@ class QChem(GenericDFTJob):
         with open(os.path.join(self.working_directory, 'job.out')) as f:
             print(f.read())
 
+
+    def enable_gpu(self):
+        self.gpu_enabled = True
+        self.executable.version='2021_gpu_mpi'
+
+
     def pes_scan(self, types, indices, limits, steps):
         '''
             Function to set up a potential energy scan. One and two dimensional scans are supported.
@@ -93,7 +107,7 @@ class QChem(GenericDFTJob):
                 limits (list of tuples): the IC limits between which a range is constructed using steps
                 steps (list of ints): number of steps between limits (including the limits)
         '''
-        self.input['jobtype'] = 'PES-SCAN'
+        self.input['jobtype'] = 'PES_SCAN'
 
         def sanity_check(arg):
             if not isinstance(arg,list):
@@ -344,7 +358,9 @@ def write_input(input_dict, working_directory='.'):
     else:
         jobtype = input_dict['jobtype'].upper()
         #sanity check
-        assert jobtype in ['SP','OPT','TS','FREQ','FORCE','RPATH','NMR','ISSC','BSSE','EDA','PES-SCAN']
+        assert jobtype in ['SP','OPT','TS','FREQ','FORCE','RPATH','NMR','ISSC','BSSE','EDA','PES_SCAN']
+        if jobtype in ['FORCE','RPATH','NMR','ISSC','BSSE','EDA','PES_SCAN']:
+            warnings.warn('The pyiron plugin for QChem is still under construction, and the output for this jobtype will not be parsed correctly.')
         if jobtype == 'FREQ':
             if input_dict['settings'] is None:
                 input_dict['settings'] = {}
@@ -367,6 +383,15 @@ def write_input(input_dict, working_directory='.'):
     assert mem[-2:]=='MB' # later this should be converted to a function that takes care of the conversion to MB
     nmem = str(int(int(re.findall("\d+", mem)[0]) * cores))
     rem_parameters['MEM_TOTAL'] = nmem # memory in MBs
+
+    # GPU sanity check
+    if input_dict['gpu_enabled']:
+        try:
+            assert cores%8==0
+            assert input_dict['cluster']=='joltik'
+        except AssertionError:
+            print(input_dict['cluster'],cores,cores%8)
+            raise AssertionError('For a GPU calculation, you need to run the calculation on joltik with a multiple of 8 cores for each gpu.')
 
     # Add all other options from the settings dict
     if input_dict['settings'] is not None:

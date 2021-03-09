@@ -562,7 +562,7 @@ class QChem(Logfile):
                     msg = """ECPs are present, but the number of core \
 electrons isn't printed at all. Rerun with "iprint >= 100" to get \
 coreelectrons."""
-                    self.logger.warning(msg)
+                    print(msg)
                     self.incorrect_coreelectrons = True
                 elif ecp_is_gen and not has_iprint:
                     nmissing = sum(ncore == 0
@@ -571,12 +571,12 @@ coreelectrons."""
                         msg = """ECPs are present, but coreelectrons can only \
 be guessed for one element at most. Rerun with "iprint >= 100" to get \
 coreelectrons."""
-                        self.logger.warning(msg)
+                        print(msg)
                         self.incorrect_coreelectrons = True
                     elif self.user_input['molecule'].get('charge') is None:
                         msg = """ECPs are present, but the total charge \
 cannot be determined. Rerun without `$molecule read`."""
-                        self.logger.warning(msg)
+                        print(msg)
                         self.incorrect_coreelectrons = True
                     else:
                         user_charge = self.user_input['molecule']['charge']
@@ -1956,6 +1956,18 @@ cannot be determined. Rerun without `$molecule read`."""
                     self.entropy = entropy*kcalmol
                 if not hasattr(self, 'freeenergy'):
                     self.freeenergy = self.enthalpy - self.entropy
+
+
+        # solvent parsing
+        # if 'Maximum     Tolerance    Cnvgd?' in line:
+        #     line_g = next(inputfile).split()[1:3]
+        #     line_d = next(inputfile).split()[1:3]
+        #     line_e = next(inputfile).split()[2:4]
+        #
+        #     if not hasattr(self, 'geotargets'):
+        #         self.geotargets = [line_g[1], line_d[1], utils_float(line_e[1])]
+        #     if not hasattr(self, 'geovalues'):
+        #         self.geovalues = []
 
         if line[:16] == ' Total job time:':
             self.metadata['success'] = True
