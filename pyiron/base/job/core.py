@@ -912,7 +912,7 @@ class JobCore(PyironObject):
         try:
             if not job_name.isidentifier():
                 raise ValueError(
-                    'Invalid name for a PyIron object (no "." or "#") allowed'
+                    'Invalid name for a PyIron object (only alphanumeric letters (a-z) and (0-9), or underscores (_) allowed)'
                 )
         except AttributeError:
             pass  # no name check in Python 2.7
