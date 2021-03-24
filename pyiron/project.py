@@ -112,6 +112,8 @@ class Project(ProjectCore):
     """
 
     def __init__(self, path="", user=None, sql_query=None, default_working_directory=False):
+        if " " in path:
+            raise ValueError('The project path must not contain any spaces.')
         super(Project, self).__init__(
             path=path,
             user=user,
