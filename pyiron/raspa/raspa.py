@@ -1,7 +1,6 @@
 # coding: utf-8
 from pyiron.base.generic.parameters import GenericParameters
-from pyiron.atomistics.structure.atoms import Atoms
-from pyiron.atomistics.job.atomistic import AtomisticGenericJob, GenericOutput
+from pyiron.base.job.generic import GenericJob as GenericJobCore
 from pyiron.base.settings.generic import Settings
 
 from molmod.units import *
@@ -9,49 +8,51 @@ from molmod.constants import *
 from molmod.periodic import periodic as pt
 import subprocess
 
-import os, posixpath, numpy as np, h5py, matplotlib.pyplot as pp, stat, warnings, glob
+import os, posixpath, numpy as np, h5py, matplotlib.pyplot as pp, stat, warnings, glob, re
 
 
 s = Settings()
+KELVIN_TO_KJ_PER_MOL = float(8.314464919 / 1000.0)  #exactly the same as Raspa
 
-
-class Raspa(AtomisticGenericJob):
+class Raspa(GenericJobCore):
     def __init__(self, project, job_name):
         super(Raspa, self).__init__(project, job_name)
         self.__name__ = "Raspa"
         self._executable_activate(enforce=True)
         self.input = RaspaInput()
+        self.systems = None
+        self.components = None
+        self.definitions = None
 
     def write_input(self):
         input_dict = {
             'simulationtype': self.input['SimulationType'],
-            'molecules': self.input['molecules'],
-            'boxes': self.input['boxes'],
-            'frameworks': self.input['frameworks'],
-            'settings': self.input['settings']
+            'components': self.components,
+            'systems': self.systems,
+            'definitions': self.definitions,
+            'settings': self.input['settings'],
         }
-        write_simulation_input(input_dict,working_directory=self.working_directory)
+        write_input(input_dict,working_directory=self.working_directory)
 
 
     def collect_output(self):
-        output_dict = collect_output(output_file=posixpath.join(self.working_directory, 'output.h5'))
+        output_files = glob.glob(posixpath.join(self.working_directory,'Output/*/*.data'))
+        output_dict = {}
+        for out in output_files:
+            output_dict.update(collect_output(output_file=out,ncomponents=len(self.components)))
         with self.project_hdf5.open("output") as hdf5_output:
             for k, v in output_dict.items():
                 hdf5_output[k] = v
-            hdf5_output['generic/indices'] = np.vstack([self.structure.indices] * output_dict['generic/positions'].shape[0])
 
     def to_hdf(self, hdf=None, group_name=None):
-        super(Yaff, self).to_hdf(hdf=hdf, group_name=group_name)
+        super(Raspa, self).to_hdf(hdf=hdf, group_name=group_name)
         with self.project_hdf5.open("input") as hdf5_input:
-            self.structure.to_hdf(hdf5_input)
             self.input.to_hdf(hdf5_input)
 
     def from_hdf(self, hdf=None, group_name=None):
-        super(Yaff, self).from_hdf(hdf=hdf, group_name=group_name)
+        super(Raspa, self).from_hdf(hdf=hdf, group_name=group_name)
         with self.project_hdf5.open("input") as hdf5_input:
             self.input.from_hdf(hdf5_input)
-            self.structure = Atoms().from_hdf(hdf5_input)
-
 
     def log(self):
         for fname in glob.glob(posixpath.join(self.working_directory, 'Output/*')):
@@ -59,6 +60,58 @@ class Raspa(AtomisticGenericJob):
                 print('Output for {}\n'.format(fname.split('/')[-2]))
                 print(f.read())
                 print('#'*20) # to separate
+
+    def add_system(self,name,type,fileloc=None,options={}):
+        '''
+            Add a system to the raspa job.
+
+            **Arguments**
+
+            name (string): Name of the system
+            type (string): 'Box' or 'Framework'
+            fileloc (string): (only for framework type) path to the corresponding cif file
+            options (dict): the options for the system
+        '''
+
+        if self.systems is None:
+            self.systems = {} # dicts respect input order
+
+        self.systems[(name,type)] = options
+
+        if type=='Framework':
+            assert fileloc is not None
+            if self.definitions is None:
+                self.definitions = {}
+            self.definitions['system_{}_fname'.format(name)] = fileloc
+
+
+    def add_component(self,name,fileloc,options={}):
+        '''
+            Add a system to the raspa job.
+
+            **Arguments**
+
+            name (string): Name of the molecule
+            fileloc (string):  path to the corresponding molecule.def file
+            options (dict): the options for the system
+        '''
+
+        if self.components is None:
+            self.components = {} # dicts respect input order
+
+        self.components[name] = options
+
+        if self.definitions is None:
+            self.definitions = {}
+        self.definitions['component_{}_fname'.format(name)] = fileloc
+
+    def add_definition(self,fname):
+        name = fname.split('/')[-1].split('.')[0]
+        print('Adding {}'.format(name))
+
+        if self.definitions is None:
+            self.definitions = {}
+        self.definitions['def_{}'.format(name)] = fname
 
 
     def calc_minimize(self, max_iter=1000, n_print=5):
@@ -76,8 +129,15 @@ class Raspa(AtomisticGenericJob):
             n_print (int):  Print frequency
         '''
         self.input['SimulationType'] = 'minimization'
-        self.input['NumberOfCycles'] = max_iter
-        self.input['PrintEvery'] = n_print
+
+        settings = {}
+        settings['NumberOfCycles'] = max_iter
+        settings['PrintEvery'] = n_print
+
+        if self.input['settings'] is None:
+            self.input['settings'] = {}
+
+        self.input['settings'].update(settings)
 
         super(Raspa, self).calc_minimize(max_iter=max_iter, n_print=n_print)
 
@@ -88,7 +148,15 @@ class Raspa(AtomisticGenericJob):
         '''
 
         self.input['SimulationType'] = 'minimization'
-        self.input['NumberOfCycles'] = 1
+
+        settings = {}
+        settings['NumberOfCycles'] = 1
+
+        if self.input['settings'] is None:
+            self.input['settings'] = {}
+
+        self.input['settings'].update(settings)
+
         super(Raspa, self).calc_static()
 
 
@@ -119,33 +187,40 @@ class Raspa(AtomisticGenericJob):
 
         '''
         self.input['SimulationType'] = 'moleculardynamics'
-        self.input['NumberOfCycles'] = nsteps
-        self.input['NumberOfInitializationCycles'] = init_cycles
-        self.input['NumberOfEquilibrationCycles'] = eq_cycles
-        self.input['PrintEvery'] = n_print
 
+        settings = {}
+        settings['NumberOfCycles'] = nsteps
+        settings['NumberOfInitializationCycles'] = init_cycles
+        settings['NumberOfEquilibrationCycles'] = eq_cycles
+        settings['PrintEvery'] = n_print
 
-        self.input['TimeStep'] = time_step
+        settings['TimeStep'] = time_step
+
         if temperature is not None:
-            self.input['ExternalTemperature'] = temperature
+            settings['ExternalTemperature'] = temperature
         if pressure is not None:
-            self.input['ExternalPressure'] = pressure
-        self.input['TimeScaleParameterThermostat'] = timecon_thermo
-        self.input['TimeScaleParameterBarostat'] = timecon_baro
+            settings['ExternalPressure'] = pressure
+
+        settings['TimeScaleParameterThermostat'] = timecon_thermo
+        settings['TimeScaleParameterBarostat'] = timecon_baro
+
 
         if isinstance(ensemble,dict):
             assert 'init' in ensemble and 'run' in ensemble
-            self.input['InitEnsemble'] = ensemble['init']
-            self.input['RunEnsemble'] = ensemble['run']
+            settings['InitEnsemble'] = ensemble['init']
+            settings['RunEnsemble'] = ensemble['run']
         else:
-            self.input['Ensemble'] = ensemble
+            settings['Ensemble'] = ensemble
+
+        if self.input['settings'] is None:
+            self.input['settings'] = {}
+
+        self.input['settings'].update(settings)
 
         super(Raspa, self).calc_md(temperature=temperature, pressure=pressure, n_ionic_steps=nsteps,
                                    time_step=time_step, n_print=n_print,
                                    temperature_damping_timescale=timecon_thermo,
                                    pressure_damping_timescale=timecon_baro)
-
-
 
 
 class RaspaInput(GenericParameters):
@@ -154,37 +229,81 @@ class RaspaInput(GenericParameters):
 
     def load_default(self):
         '''
-        Loading the default settings for the input file.
+        There are no default settings for the Raspa plugin!
         '''
-        input_str = """\
-example value # comment
+        input_str = """
 """
         self.load_string(input_str)
 
 
+def write_input(input_dict, working_directory='.'):
+
+    # Load dictionary
+    simulationtype = input_dict['simulationtype']
+    settings       = input_dict['settings'] # computational settings
+    systems        = input_dict['systems'] # the box(es) or framework(s) in which the molecule(s) are simulated
+    components     = input_dict['components'] # the component(s) under investigation
+    definitions    = input_dict['definitions'] # the definition(s) which need to be copied
+
+    assert simulationtype.lower() in ['montecarlo','moleculardynamics','minimization','barriercrossing','numerical']
+    warnings.warn('The pyiron plugin for Raspa is still under construction, and the output will likely not be parsed correctly.')
+
+    if systems is not None:
+        assert isinstance(systems,dict)
+        assert all(isinstance(v, dict) for k,v in systems.items())
+
+    if components is not None:
+        assert isinstance(components,dict)
+        assert all(isinstance(v, dict) for k,v in components.items())
+
+
+    def write_dict(f,d,width=0,leading_whitespaces=0):
+        for k,v in d.items():
+            if not isinstance(v,list):
+                v = [v]
+            f.write(' '*leading_whitespaces + '{:<{width}} {}\n'.format(k,' '.join([str(val) for val in v]),width=width))
+
+    len_setting_names = [len(k) for k,v in settings.items()] if len(settings)>0 else 0
+    len_system_settings_names = [len(k) if len(system)>0 else 0 for name,system in systems.items() for k,v in system.items()]
+    len_component_settings_names = [len(k) if len(component)>0 else 0 for name,component in components.items() for k,v in component.items()]
+    max_width = max([max(len_setting_names), max(len_system_settings_names), max(len_component_settings_names)+12]) # +12 comes from the length of 'Component i '
+
+    # Write to file
+    with open(os.path.join(working_directory, 'simulation.input'), 'w') as f:
+        f.write('{: <{width}} {}\n'.format('SimulationType',simulationtype,width=max_width))
+
+        # Write all settings
+        if len(settings)>0:
+            write_dict(f,settings,width=max_width)
+        f.write('\n')
+
+        # Write systems (assume only boxes or only frameworks are present)
+        for n,(key,system) in enumerate(systems.items()):
+            f.write('{: <{width}} {}\n'.format(key[1],n,width=max_width))
+            if key[1]=='Framework':
+                f.write('{: <{width}} {}\n'.format('FrameworkName',key[0],width=max_width))
+            write_dict(f,system,width=max_width)
+        f.write('\n')
+
+        # Write components
+        for n,(name,component) in enumerate(components.items()):
+            f.write('{} {} {: <{width}} {}\n'.format('Component',n,'MoleculeName',name,width=max_width-12))
+            write_dict(f,component,width=max_width-12,leading_whitespaces=12)
+
+        f.write('\n\n')
+
+    # Copy all the definition files
+    if len(definitions)>0:
+        for k,definition in definitions.items():
+            new_file_loc = definition.split('/')[-1]
+            with open(definition,'r') as f:
+                text = f.read()
+            with open(os.path.join(working_directory, new_file_loc), 'w') as f:
+                f.write(text)
 
 
 #####################################
 # OUTPUT PARSING, BASED ON AIIDA CODE
-
-# manage block of the first type
-# --------------------------------------------------------------------------------------------
-BLOCK_1_LIST = [
-    #("Average temperature:", "temperature", (1, 2, 4), 0), # misleading property!
-    #("Average Pressure:", "pressure", (1, 2, 4), 0), # misleading property!
-    ("Average Volume:", "cell_volume", (1, 2, 4), 0),
-    ("Average Density:", "adsorbate_density", (1, 2, 4), 0),
-    #("Average Heat Capacity", "framework_heat_capacity", (1, 2, 4), 0), # misleading property!
-    ("Enthalpy of adsorption:", "enthalpy_of_adsorption", (1, 4, 3), 4),
-    ("Tail-correction energy:", "tail_correction_energy", (1, 2, 4), 0)
-    #("Total energy:$", "total_energy", (1, 2, 4), 0), # not important property!
-]
-
-# block of box properties.
-BOX_PROP_LIST = [
-    ("Average Box-lengths:", 'box'),
-]
-
 
 def parse_block1(flines, result_dict, prop, value=1, unit=2, dev=4):
     """Parse block.
@@ -208,21 +327,6 @@ def parse_block1(flines, result_dict, prop, value=1, unit=2, dev=4):
             result_dict[prop + '_unit'] = re.sub(r"[{}()\[\]]", '', line.split()[unit])
             result_dict[prop + '_dev'] = float(line.split()[dev])
             break
-
-# manage energy reading
-# --------------------------------------------------------------------------------------------
-ENERGY_CURRENT_LIST = [
-    ("Host/Adsorbate energy:", "host/ads", "tot"),
-    ("Host/Adsorbate VDW energy:", "host/ads", "vdw"),
-    ("Host/Adsorbate Coulomb energy:", "host/ads", "coulomb"),
-    ("Adsorbate/Adsorbate energy:", "ads/ads", "tot"),
-    ("Adsorbate/Adsorbate VDW energy:", "ads/ads", "vdw"),
-    ("Adsorbate/Adsorbate Coulomb energy:", "ads/ads", "coulomb"),
-]
-
-ENERGY_AVERAGE_LIST = [("Average Adsorbate-Adsorbate energy:", "ads/ads"),
-                       ("Average Host-Adsorbate energy:", "host/ads")]
-
 
 def parse_block_energy(flines, res_dict, prop):
     """Parse energy block.
@@ -251,18 +355,6 @@ def parse_block_energy(flines, res_dict, prop):
             res_dict["energy_{}_coulomb_dev".format(prop)] = float(line.split()[5]) * KELVIN_TO_KJ_PER_MOL
             return
 
-
-
-# manage lines with components
-# --------------------------------------------------------------------------------------------
-LINES_WITH_COMPONENT_LIST = [
-    (" Average Widom Rosenbluth-weight:", "widom_rosenbluth_factor"),
-    (" Average chemical potential: ", "chemical_potential"),
-    (" Average Henry coefficient: ", "henry_coefficient"),
-    (" Average  <U_gh>_1-<U_h>_0:", "adsorption_energy_widom"),
-]
-
-
 def parse_lines_with_component(res_components, components, line, prop):
     """Parse lines that contain components"""
     # self.logger.info("analysing line: {}".format(line))
@@ -273,11 +365,51 @@ def parse_lines_with_component(res_components, components, line, prop):
             res_components[i][prop + '_dev'] = float(words[-2])
             res_components[i][prop + '_average'] = float(words[-4])
 
-
-
-# pylint: disable=too-many-locals, too-many-arguments, too-many-statements, too-many-branches
 def parse_base_output(output_abs_path, system_name, ncomponents):
     """Parse RASPA output file: it is divided in different parts, whose start/end is carefully documented."""
+
+    # manage block of the first type
+    # --------------------------------------------------------------------------------------------
+    BLOCK_1_LIST = [
+        ("Average temperature:", "temperature", (1, 2, 4), 0), # misleading property!
+        ("Average Pressure:", "pressure", (1, 2, 4), 0), # misleading property!
+        ("Average Volume:", "cell_volume", (1, 2, 4), 0),
+        ("Average Density:", "adsorbate_density", (1, 2, 4), 0),
+        ("Average Heat Capacity", "framework_heat_capacity", (1, 2, 4), 0), # misleading property!
+        ("Enthalpy of adsorption:", "enthalpy_of_adsorption", (1, 4, 3), 4),
+        ("Tail-correction energy:", "tail_correction_energy", (1, 2, 4), 0),
+        ("Total energy:", "total_energy", (1, 2, 4), 0), # not important property!
+    ]
+
+    # block of box properties.
+    BOX_PROP_LIST = [
+        ("Average Box-lengths:", 'box'),
+    ]
+
+
+    # manage energy reading
+    # --------------------------------------------------------------------------------------------
+    ENERGY_CURRENT_LIST = [
+        ("Host/Adsorbate energy:", "host/ads", "tot"),
+        ("Host/Adsorbate VDW energy:", "host/ads", "vdw"),
+        ("Host/Adsorbate Coulomb energy:", "host/ads", "coulomb"),
+        ("Adsorbate/Adsorbate energy:", "ads/ads", "tot"),
+        ("Adsorbate/Adsorbate VDW energy:", "ads/ads", "vdw"),
+        ("Adsorbate/Adsorbate Coulomb energy:", "ads/ads", "coulomb"),
+    ]
+
+    ENERGY_AVERAGE_LIST = [("Average Adsorbate-Adsorbate energy:", "ads/ads"),
+                           ("Average Host-Adsorbate energy:", "host/ads")]
+
+    # manage lines with components
+    # --------------------------------------------------------------------------------------------
+    LINES_WITH_COMPONENT_LIST = [
+        (" Average Widom Rosenbluth-weight:", "widom_rosenbluth_factor"),
+        (" Average chemical potential: ", "chemical_potential"),
+        (" Average Henry coefficient: ", "henry_coefficient"),
+        (" Average  <U_gh>_1-<U_h>_0:", "adsorption_energy_widom"),
+    ]
+
 
     warnings = []
     res_per_component = []
@@ -457,12 +589,15 @@ def parse_base_output(output_abs_path, system_name, ncomponents):
     return return_dictionary, warnings
 
 
-def collect_output(output_file):
-    # this routine basically reads and returns the output HDF5 file produced by Yaff
-    # read output
-    h5 = h5py.File(output_file, mode='r')
-    # translate to dict
-    output_dict = hdf2dict(h5)
-    # read colvar file if it is there
-    read_colvar(output_file,output_dict)
+def flatten_dict(dd, separator ='/', prefix =''):
+    return { prefix + separator + k if prefix else k : v
+             for kk, vv in dd.items()
+             for k, v in flatten_dict(vv, separator, kk).items()
+             } if isinstance(dd, dict) else { prefix : dd }
+
+def collect_output(output_file,ncomponents=1):
+    name = output_file.split('/')[-2]
+    output_dict,_ = parse_base_output(output_file,name,ncomponents)
+    output_dict = flatten_dict(output_dict)
+    
     return output_dict
