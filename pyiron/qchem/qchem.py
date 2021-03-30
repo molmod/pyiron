@@ -37,14 +37,12 @@ class QChem(GenericDFTJob):
         self.__name__ = "QChem"
         self._executable_activate(enforce=True)
         self.input = QChemInput()
-        self.gpu_enabled = False
-
 
     def write_input(self):
         input_dict = {'mem': self.server.memory_limit, # per core memory
                       'cores': self.server.cores,
                       'cluster': self.server.queue,
-                      'gpu_enabled': self.gpu_enabled,
+                      'gpu_enabled': self.input['gpu_enabled'],
                       'jobtype' : self.input['jobtype'],
                       'lot': self.input['lot'],
                       'basis_set': self.input['basis_set'],
@@ -87,7 +85,7 @@ class QChem(GenericDFTJob):
 
 
     def enable_gpu(self):
-        self.gpu_enabled = True
+        self.input['gpu_enabled'] = True
         self.executable.version='2021_gpu_mpi'
 
 
