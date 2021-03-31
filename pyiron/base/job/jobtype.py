@@ -44,6 +44,7 @@ JOB_CLASS_DICT = {
     "PhonopyJob": "pyiron.atomistics.master.phonopy",
     "QChem": "pyiron.qchem.qchem",
     "QuickFF": "pyiron.quickff.quickff",
+    "Raspa": "pyiron.raspa.raspa",
     "ScipyMinimizer": "pyiron.interactive.scipy_minimizer",
     "ScriptJob": "pyiron.base.job.script",
     "SerialMaster": "pyiron.atomistics.master.serial",
