@@ -39,6 +39,13 @@ class QChem(GenericDFTJob):
         self.input = QChemInput()
 
     def write_input(self):
+        # Check core settings for freq job
+        if self.input['jobtype'].upper()=='FREQ':
+            if self.server.cores > len(self.structure.positions):
+                warnings.warn('The number of cores for a frequency calculation has to be smaller or equal to the number of atoms. This has been automatically updated.')
+                self.server.cores = len(self.structure.positions)
+
+
         input_dict = {'mem': self.server.memory_limit, # per core memory
                       'cores': self.server.cores,
                       'cluster': self.server.queue,
