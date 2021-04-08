@@ -48,11 +48,17 @@ class Raspa(GenericJobCore):
         super(Raspa, self).to_hdf(hdf=hdf, group_name=group_name)
         with self.project_hdf5.open("input") as hdf5_input:
             self.input.to_hdf(hdf5_input)
+            hdf5_input['generic/systems'] = self.systems
+            hdf5_input['generic/components'] = self.components
+            hdf5_input['generic/definitions'] = self.definitions
 
     def from_hdf(self, hdf=None, group_name=None):
         super(Raspa, self).from_hdf(hdf=hdf, group_name=group_name)
         with self.project_hdf5.open("input") as hdf5_input:
             self.input.from_hdf(hdf5_input)
+            self.systems = hdf5_input['generic/systems']
+            self.components = hdf5_input['generic/components']
+            self.definitions = hdf5_input['generic/definitions']
 
     def log(self):
         for fname in glob.glob(posixpath.join(self.working_directory, 'Output/*')):
@@ -76,7 +82,7 @@ class Raspa(GenericJobCore):
         if self.systems is None:
             self.systems = {} # dicts respect input order
 
-        self.systems[(name,type)] = options
+        self.systems[name+'_'+type] = options
 
         if type=='Framework':
             assert fileloc is not None
@@ -279,9 +285,11 @@ def write_input(input_dict, working_directory='.'):
 
         # Write systems (assume only boxes or only frameworks are present)
         for n,(key,system) in enumerate(systems.items()):
-            f.write('{: <{width}} {}\n'.format(key[1],n,width=max_width))
-            if key[1]=='Framework':
-                f.write('{: <{width}} {}\n'.format('FrameworkName',key[0],width=max_width))
+            key_name = '_'.join(key.split('_')[:-1])
+            key_type = key.split('_')[-1]
+            f.write('{: <{width}} {}\n'.format(key_type,n,width=max_width))
+            if key_type=='Framework':
+                f.write('{: <{width}} {}\n'.format('FrameworkName',key_name,width=max_width))
             write_dict(f,system,width=max_width)
         f.write('\n')
 
@@ -599,5 +607,5 @@ def collect_output(output_file,ncomponents=1):
     name = output_file.split('/')[-2]
     output_dict,_ = parse_base_output(output_file,name,ncomponents)
     output_dict = flatten_dict(output_dict)
-    
+
     return output_dict
