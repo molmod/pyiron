@@ -45,11 +45,16 @@ class QChem(GenericDFTJob):
                 warnings.warn('The number of cores for a frequency calculation has to be smaller or equal to the number of atoms. This has been automatically updated.')
                 self.server.cores = len(self.structure.positions)
 
+        # GPU sanity check
+        if self.server.gpus is not None and self.server.gpus>0:
+            self.executable.version = '2021_gpu_mpi'
+            if not self.server.queue == 'joltik':
+                self.server.queue = 'joltik'
+                print('Since you are trying to run a GPU calculation the cluster has been automatically changed to joltik.')
+
 
         input_dict = {'mem': self.server.memory_limit, # per core memory
                       'cores': self.server.cores,
-                      'cluster': self.server.queue,
-                      'gpu_enabled': self.input['gpu_enabled'],
                       'jobtype' : self.input['jobtype'],
                       'lot': self.input['lot'],
                       'basis_set': self.input['basis_set'],
@@ -89,11 +94,6 @@ class QChem(GenericDFTJob):
     def log(self):
         with open(os.path.join(self.working_directory, 'job.out')) as f:
             print(f.read())
-
-
-    def enable_gpu(self):
-        self.input['gpu_enabled'] = True
-        self.executable.version='2021_gpu_mpi'
 
 
     def pes_scan(self, types, indices, limits, steps):
@@ -388,15 +388,6 @@ def write_input(input_dict, working_directory='.'):
     assert mem[-2:]=='MB' # later this should be converted to a function that takes care of the conversion to MB
     nmem = str(int(int(re.findall("\d+", mem)[0]) * cores))
     rem_parameters['MEM_TOTAL'] = nmem # memory in MBs
-
-    # GPU sanity check
-    if input_dict['gpu_enabled']:
-        try:
-            assert cores%8==0
-            assert input_dict['cluster']=='joltik'
-        except AssertionError:
-            print(input_dict['cluster'],cores,cores%8)
-            raise AssertionError('For a GPU calculation, you need to run the calculation on joltik with a multiple of 8 cores for each gpu.')
 
     # Add all other options from the settings dict
     if input_dict['settings'] is not None:
