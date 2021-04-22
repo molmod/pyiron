@@ -44,7 +44,7 @@ class Horton(GenericJob):
         self.scheme = None
         self.fchk = None
         self.pars_file = os.path.join(self.working_directory, 'pars_ei.txt')
-        print('Warning: Horton jobs can only be performed on the swalot and phanpy clusters!')
+        print('Warning: Horton jobs can only be performed on the swalot cluster!')
 
 
     def write_input(self):
@@ -93,11 +93,18 @@ class Horton(GenericJob):
         super(Horton, self).to_hdf(hdf=hdf, group_name=group_name)
         with self.project_hdf5.open("input") as hdf5_input:
             self.input.to_hdf(hdf5_input)
+            hdf5_input['generic/scheme'] = self.scheme
+            hdf5_input['generic/fchk'] = self.fchk
+            hdf5_input['generic/pars_file'] = self.pars_file
 
     def from_hdf(self, hdf=None, group_name=None):
         super(Horton, self).from_hdf(hdf=hdf, group_name=group_name)
         with self.project_hdf5.open("input") as hdf5_input:
             self.input.from_hdf(hdf5_input)
+            self.scheme = hdf5_input['generic/scheme']
+            self.fchk = hdf5_input['generic/fchk']
+            self.pars_file = hdf5_input['generic/pars_file']
+
 
     def log(self):
         with open(os.path.join(self.working_directory, 'horton.log')) as f:

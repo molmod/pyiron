@@ -75,9 +75,10 @@ class Server(
     """
 
     def __init__(
-        self, host=None, queue=None, cores=1, threads=1, run_mode="modal", new_hdf=True
+        self, host=None, queue=None, cores=1, gpus=None, threads=1, run_mode="modal", new_hdf=True
     ):
         self._cores = cores
+        self._gpus = gpus
         self._threads = threads
         self._run_time = None
         self._memory_limit = None
@@ -253,6 +254,27 @@ class Server(
             self._cores = new_cores
 
     @property
+    def gpus(self):
+        """
+        The number of gpus selected for the current simulation
+
+        Returns:
+            (int): number of gpus
+        """
+        return self._gpus
+
+    @gpus.setter
+    def gpus(self, new_gpus):
+        """
+        The number of gpus selected for the current simulation
+
+        Args:
+            new_gpus (int): number of gpus
+        """
+
+        self._gpus = new_gpus
+
+    @property
     def run_time(self):
         """
         The run time in seconds selected for the current simulation
@@ -422,6 +444,7 @@ class Server(
         hdf_dict["queue"] = self.queue
         hdf_dict["qid"] = self._queue_id
         hdf_dict["cores"] = self.cores
+        hdf_dict["gpus"] = self.gpus
         hdf_dict["threads"] = self.threads
         hdf_dict["new_h5"] = self.new_hdf
         hdf_dict["structure_id"] = self.structure_id
@@ -461,6 +484,8 @@ class Server(
         if "structure_id" in hdf_dict.keys():
             self._structure_id = hdf_dict["structure_id"]
         self._cores = hdf_dict["cores"]
+        if "gpus" in hdf_dict.keys():
+            self._gpus = hdf_dict["gpus"]
         if "run_time" in hdf_dict.keys():
             self._run_time = hdf_dict["run_time"]
         if "memory_limit" in hdf_dict.keys():
@@ -490,6 +515,7 @@ class Server(
         Delete the Server object from memory
         """
         del self._cores
+        del self._gpus
         del self._threads
         del self._run_time
         del self._memory_limit
