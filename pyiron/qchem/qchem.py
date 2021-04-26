@@ -47,7 +47,9 @@ class QChem(GenericDFTJob):
 
         # GPU sanity check
         if self.server.gpus is not None and self.server.gpus>0:
-            self.executable.version = '2021_gpu_mpi'
+            if not 'gpu' in self.executable.version:
+                self.executable.version = '2021_gpu_mpi'
+                print('You did not select a gpu executable. The 2021_gpu_mpi version was automatically assigned.')
             if not self.server.queue == 'joltik':
                 self.server.queue = 'joltik'
                 print('Since you are trying to run a GPU calculation the cluster has been automatically changed to joltik.')
