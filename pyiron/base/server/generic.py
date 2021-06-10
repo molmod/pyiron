@@ -286,7 +286,7 @@ class Server(
         """
         return self._account_id
 
-    @gpus.setter
+    @account_id.setter
     def account_id(self, new_account_id):
         """
         The account_id of the Tier-1 project for breniac
@@ -511,7 +511,7 @@ class Server(
         self._cores = hdf_dict["cores"]
         if "gpus" in hdf_dict.keys():
             self._gpus = hdf_dict["gpus"]
-        if "gpus" in hdf_dict.keys():
+        if "account_id" in hdf_dict.keys():
             self._account_id = hdf_dict["account_id"]
         if "run_time" in hdf_dict.keys():
             self._run_time = hdf_dict["run_time"]
