@@ -984,10 +984,11 @@ class GenericJob(JobCore):
         try:
             que_id = s.queue_adapter.submit_job(
                 queue=self.server.queue,
-                job_name="pi_" + str(self.job_id),
+                job_name=self._name,
                 working_directory=self.project_hdf5.working_directory,
                 cores=self.server.cores,
                 gpus=self.server.gpus,
+                account_id=self.server.account_id,
                 run_time_max=self.server.run_time,
                 memory_max=self.server.memory_limit,
                 command=command,

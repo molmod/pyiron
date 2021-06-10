@@ -75,7 +75,7 @@ class Server(
     """
 
     def __init__(
-        self, host=None, queue=None, cores=1, gpus=None, threads=1, run_mode="modal", new_hdf=True
+        self, host=None, queue=None, cores=1, gpus=None, account_id=None, threads=1, run_mode="modal", new_hdf=True
     ):
         self._cores = cores
         self._gpus = gpus
@@ -83,6 +83,7 @@ class Server(
         self._run_time = None
         self._memory_limit = None
         self._host = self._init_host(host=host)
+        self._account_id = account_id
 
         self._active_queue = queue
 
@@ -274,6 +275,29 @@ class Server(
 
         self._gpus = new_gpus
 
+
+    @property
+    def account_id(self):
+        """
+        The account_id of the Tier-1 project for breniac
+
+        Returns:
+            (str): the account_id
+        """
+        return self._account_id
+
+    @gpus.setter
+    def account_id(self, new_account_id):
+        """
+        The account_id of the Tier-1 project for breniac
+
+        Args:
+            new_account_id (str): the account_id
+        """
+
+        self._account_id = account_id
+
+
     @property
     def run_time(self):
         """
@@ -445,6 +469,7 @@ class Server(
         hdf_dict["qid"] = self._queue_id
         hdf_dict["cores"] = self.cores
         hdf_dict["gpus"] = self.gpus
+        hdf_dict["account_id"] = self.account_id
         hdf_dict["threads"] = self.threads
         hdf_dict["new_h5"] = self.new_hdf
         hdf_dict["structure_id"] = self.structure_id
@@ -486,6 +511,8 @@ class Server(
         self._cores = hdf_dict["cores"]
         if "gpus" in hdf_dict.keys():
             self._gpus = hdf_dict["gpus"]
+        if "gpus" in hdf_dict.keys():
+            self._account_id = hdf_dict["account_id"]
         if "run_time" in hdf_dict.keys():
             self._run_time = hdf_dict["run_time"]
         if "memory_limit" in hdf_dict.keys():
@@ -516,6 +543,7 @@ class Server(
         """
         del self._cores
         del self._gpus
+        del self._account_id
         del self._threads
         del self._run_time
         del self._memory_limit
