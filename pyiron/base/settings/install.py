@@ -166,8 +166,8 @@ def install_dialog():
             install_pyiron_env(env_loc=env_loc,
                                location=location,
                                zip_file="resources.zip",
-                               giturl_for_zip_file="https://github.com/SanderBorgmans/pyiron-resources/archive/hpc_ugent.zip",
-                               git_folder_name="pyiron-resources-hpc_ugent")
+                               giturl_for_zip_file="https://github.com/SanderBorgmans/pyiron-resources/archive/breniac.zip",
+                               git_folder_name="pyiron-resources-breniac")
         else:
             raise ValueError('pyiron was not installed!')
 
