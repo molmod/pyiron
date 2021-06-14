@@ -295,7 +295,7 @@ class Server(
             new_account_id (str): the account_id
         """
 
-        self._account_id = account_id
+        self._account_id = new_account_id
 
 
     @property
