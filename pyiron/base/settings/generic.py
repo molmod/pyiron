@@ -81,13 +81,13 @@ class Settings(with_metaclass(Singleton)):
             "disable_database": False,
         }
         environment = os.environ
-        if "PYIRONCONFIG" in environment.keys():
-            config_file = environment["PYIRONCONFIG"]
+        if "PYIRONCONFIG_TIER1" in environment.keys():
+            config_file = environment["PYIRONCONFIG_TIER1"]
         else:
             config_file = os.path.expanduser(os.path.join("~", ".pyiron"))
         if os.path.isfile(config_file):
             self._config_parse_file(config_file)
-        elif any(["PYIRON" in e for e in environment.keys() if e not in ["EBDEVELPYIRON","EBROOTPYIRON","EBEXTSLISTPYIRON","EBVERSIONPYIRON"]]):
+        elif any(["PYIRON" in e and '_TIER1' in e for e in environment.keys() if e not in ["EBDEVELPYIRON","EBROOTPYIRON","EBEXTSLISTPYIRON","EBVERSIONPYIRON"]]):
             self._configuration = self.get_config_from_environment(
                 environment=environment,
                 config=self._configuration
@@ -486,28 +486,28 @@ class Settings(with_metaclass(Singleton)):
     @staticmethod
     def get_config_from_environment(environment, config):
         env_key_mapping = {
-            "PYIRONUSER": "user",
-            "PYIRONRESOURCEPATHS": "resource_paths",
-            "PYIRONPROJECTPATHS": "project_paths",
-            "PYIRONSQLCONNECTIONSTRING": "sql_connection_string",
-            "PYIRONSQLTABLENAME": "sql_table_name",
-            "PYIRONSQLVIEWCONNECTIONSTRING": "sql_view_connection_string",
-            "PYIRONSQLVIEWTABLENAME": "sql_view_table_name",
-            "PYIRONSQLVIEWUSER": "sql_view_user",
-            "PYIRONSQLVIEWUSERKEY": "sql_view_user_key",
-            "PYIRONSQLFILE": "sql_file",
-            "PYIRONSQHOST": "sql_host",
-            "PYIRONSQLTYPE": "sql_type",
-            "PYIRONSQLUSERKEY": "sql_user_key",
-            "PYIRONSQLDATABASE": "sql_database",
-            "PYIRONPROJECTCHECKENABLED": "project_check_enabled",
-            "PYIRONDISABLE": "disable_database",
+            "PYIRONUSER_TIER1": "user",
+            "PYIRONRESOURCEPATHS_TIER1": "resource_paths",
+            "PYIRONPROJECTPATHS_TIER1": "project_paths",
+            "PYIRONSQLCONNECTIONSTRING_TIER1": "sql_connection_string",
+            "PYIRONSQLTABLENAME_TIER1": "sql_table_name",
+            "PYIRONSQLVIEWCONNECTIONSTRING_TIER1": "sql_view_connection_string",
+            "PYIRONSQLVIEWTABLENAME_TIER1": "sql_view_table_name",
+            "PYIRONSQLVIEWUSER_TIER1": "sql_view_user",
+            "PYIRONSQLVIEWUSERKEY_TIER1": "sql_view_user_key",
+            "PYIRONSQLFILE_TIER1": "sql_file",
+            "PYIRONSQHOST_TIER1": "sql_host",
+            "PYIRONSQLTYPE_TIER1": "sql_type",
+            "PYIRONSQLUSERKEY_TIER1": "sql_user_key",
+            "PYIRONSQLDATABASE_TIER1": "sql_database",
+            "PYIRONPROJECTCHECKENABLED_TIER1": "project_check_enabled",
+            "PYIRONDISABLE_TIER1": "disable_database",
         }
         for k, v in env_key_mapping.items():
             if k in environment.keys():
-                if k in ["PYIRONPROJECTCHECKENABLED", "PYIRONDISABLE"]:
+                if k in ["PYIRONPROJECTCHECKENABLED_TIER1", "PYIRONDISABLE_TIER1"]:
                     config[v] = environment[k].lower() in ['t', 'true', 'y', 'yes']
-                elif k in ["PYIRONRESOURCEPATHS", "PYIRONPROJECTPATHS"]:
+                elif k in ["PYIRONRESOURCEPATHS_TIER1", "PYIRONPROJECTPATHS_TIER1"]:
                     config[v] = environment[k].split(':')
                 else:
                     config[v] = environment[k]

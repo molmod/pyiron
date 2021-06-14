@@ -123,18 +123,18 @@ def _write_full_environ_var(env_loc=None,location='~/'):
     # Check whether bashrc already contains PYIRON variables, this can happen if bashrc has not been sourced yet
     with open(os.path.expanduser("~/.bashrc"), "r") as outfile:
         lines = outfile.readlines()
-    if not any(['PYIRON' in line for line in lines]):
+    if not any(['PYIRON' in line and '_TIER1' in line for line in lines]):
         # Write to bashrc
         with open(os.path.expanduser("~/.bashrc"), "a") as outfile:
             if not lines[-1]=='\n': outfile.write('\n')
-            outfile.write("# PYIRON env variables for pyiron file locations\n")
-            outfile.write("export PYIRONRESOURCEPATHS={}\n".format(full_path + 'pyiron/resources'))
-            outfile.write("export PYIRONPROJECTPATHS={}\n".format(full_path + 'pyiron/projects'))
+            outfile.write("# PYIRON_TIER1 env variables for pyiron file locations\n")
+            outfile.write("export PYIRONRESOURCEPATHS_TIER1={}\n".format(full_path + 'pyiron/resources'))
+            outfile.write("export PYIRONPROJECTPATHS_TIER1={}\n".format(full_path + 'pyiron/projects'))
         print('Please source the .bashrc after the initial configuration or reset your terminal.')
         print('')
         print('$ source ~/.bashrc')
     else:
-        raise SystemError('Your .bashrc already has pyiron environment variables but has not been sourced. Please execute the following in your bash shell if you are certain these are defined correctly: source ~/.bashrc')
+        raise SystemError('Your .bashrc already has pyiron_tier1 environment variables but has not been sourced. Please execute the following in your bash shell if you are certain these are defined correctly: source ~/.bashrc')
 
     return download_path
 
