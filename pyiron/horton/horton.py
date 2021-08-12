@@ -8,12 +8,6 @@ import os, posixpath, h5py, stat, glob
 
 s = Settings()
 
-def get_horton_path():
-    for resource_path in s.resource_paths:
-        p = os.path.join(resource_path, "horton", "bin", "horton.sh")
-        if os.path.exists(p):
-            return p
-
 def get_horton_template():
     for resource_path in s.resource_paths:
         p = os.path.join(resource_path, "horton", "bin", "template.com")
@@ -44,7 +38,6 @@ class Horton(GenericJob):
         self.scheme = None
         self.fchk = None
         self.pars_file = os.path.join(self.working_directory, 'pars_ei.txt')
-        print('Warning: Horton jobs can only be performed on the swalot cluster!')
 
 
     def write_input(self):
@@ -145,10 +138,7 @@ def write_input(input_dict,working_directory='.'):
 
     horton_script = posixpath.join(working_directory,'horton_job.sh')
     with open(horton_script,'w') as g:
-        with open(get_horton_path(),'r') as f:
-            for line in f:
-                g.write(line)
-            g.write('\n')
+        g.write('#!/bin/bash\n')
 
         if not input_dict['scheme'] in ['b','is','mbis']:
             g.write("mkdir atomdb; cp template.com atomdb/; cd atomdb/\n")
