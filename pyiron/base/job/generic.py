@@ -984,7 +984,7 @@ class GenericJob(JobCore):
         try:
             que_id = s.queue_adapter.submit_job(
                 queue=self.server.queue,
-                job_name=self._name,,
+                job_name=self._name,
                 working_directory=self.project_hdf5.working_directory,
                 cores=self.server.cores,
                 gpus=self.server.gpus,
