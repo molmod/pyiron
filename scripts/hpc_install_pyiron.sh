@@ -1,7 +1,7 @@
 #!/bin/bash
 
 echo "Welcome to the automatic pyiron installer."
-echo "For now this installer provides for either PhD students or students following the courses:"
+echo "For now this installer provides an automatic procedure for either PhD students or students following the courses:"
 
 courses=("phd" "nano" "atnmol")
 
@@ -42,9 +42,8 @@ esac
 
 pyironlocation="$location/$folder"
 
-# Load latest pyiron module and install pyiron at pyironlocation
-module load pyiron
-python pyiron-installer.py $pyironlocation
+# Install pyiron at pyironlocation
+pyiron-installer.py $pyironlocation
 
 # Activate VASP potentials for phd students
 case $name in
