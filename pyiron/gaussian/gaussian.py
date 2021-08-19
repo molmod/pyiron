@@ -664,7 +664,10 @@ def fchk2dict(fchk):
     if fchkdict['jobtype'] in ['fopt','popt','fts','pts','fsaddle','psaddle']:
         if 'Opt point       1 Geometries' in fchk.fields.keys(): # IRC calculations also have the fopt jobtype, but not this key
             opt_coords = fchk.get_optimization_coordinates()
-            opt_energies = fchk.get_optimization_energies()
+            if fchk.field.get('Optimization Reference Energy') is None: # this happens with new fchk version on e.g. kirlia
+                opt_energies = fchk.fields.get("Opt point       1 Results for each geome")[::2]
+            else:
+                opt_energies = fchk.field.get('Optimization Reference Energy') + fchk.fields.get("Opt point       1 Results for each geome")[::2]
             opt_gradients = fchk.get_optimization_gradients()
             irc_path = None
         elif 'IRC point       1 Geometries' in fchk.fields.keys():
