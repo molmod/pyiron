@@ -7,9 +7,34 @@ from shutil import copytree, rmtree
 import stat
 import urllib.request as urllib2
 from pathlib import Path
-import pyiron.base.settings.install as pyiron_installer
 
 location = sys.argv[1]
+
+def write_full_environ_var(env_loc=None,location='~/'):
+    if env_loc is None:
+        full_path = os.path.normpath(os.path.abspath(os.path.expanduser(location)))
+        download_path = full_path
+    else:
+        full_path = '$' + env_loc + '/' + location # this should be correctly expanded by the shell
+        download_path = os.environ[env_loc]+'/'+location
+
+    # Check whether bashrc already contains PYIRON variables, this can happen if bashrc has not been sourced yet
+    with open(os.path.expanduser("~/.bashrc"), "r") as outfile:
+        lines = outfile.readlines()
+    if not any(['PYIRON' in line for line in lines]):
+        # Write to bashrc
+        with open(os.path.expanduser("~/.bashrc"), "a") as outfile:
+            if not lines[-1]=='\n': outfile.write('\n')
+            outfile.write("# PYIRON env variables for pyiron file locations\n")
+            outfile.write("export PYIRONRESOURCEPATHS={}\n".format(full_path + 'pyiron/resources'))
+            outfile.write("export PYIRONPROJECTPATHS={}\n".format(full_path + 'pyiron/projects'))
+        print('Please source the .bashrc after the initial configuration or reset your terminal.')
+        print('')
+        print('$ source ~/.bashrc')
+    else:
+        raise SystemError('Your .bashrc already has pyiron environment variables but has not been sourced. Please execute the following in your bash shell if you are certain these are defined correctly: source ~/.bashrc')
+
+    return download_path
 
 
 def download_resources(
@@ -56,7 +81,7 @@ def download_resources(
     rmtree(temp_extract_folder)
 
 
-download_path = pyiron_installer._write_full_environ_var(env_loc=None,location=location)
+download_path = write_full_environ_var(env_loc=None,location=location)
 download_resources(zip_file="resources.zip",
                    resource_directory=download_path+'pyiron/resources',
                    giturl_for_zip_file="https://github.com/SanderBorgmans/pyiron-resources/archive/hpc_ugent.zip",
