@@ -29,6 +29,7 @@ setup(
 
     keywords='pyiron',
     packages=find_packages(exclude=["*tests*", "*docs*", "*binder*", "*conda*", "*notebooks*", "*.ci_support*"]),
+    scripts=['scripts/pyiron-installer.py', 'scripts/hpc_install_pyiron.sh'],
     install_requires=[
         'ase>=3.19',
         'defusedxml>=0.6.0',
