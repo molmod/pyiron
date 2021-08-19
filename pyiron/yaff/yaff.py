@@ -284,16 +284,8 @@ def write_plumed_enhanced(input_dict,working_directory='.'):
 
         # define umbrella sampling run
         if 'kappa' in enhanced.keys():
-            if len(enhanced['kappa'])==1:
-                kappa = '%.2f' %(enhanced['kappa']/kjmol)
-            else:
-                assert len(enhanced['kappa'])>1
-                kappa = ','.join(['%.2f' %s/kjmol for s in enhanced['kappa']])
-            if len(enhanced['loc'])==1:
-                loc = '%.2f' %(enhanced['loc'])
-            else:
-                assert len(enhanced['loc'])>1
-                loc = ','.join(['%.2f' %h for h in enhanced['loc']])
+            kappa = ','.join(['%.2f' %(float(s)/kjmol) for s in enhanced['kappa']])
+            loc = ','.join(['%.2f' %(float(h)) for h in enhanced['loc']])
 
             f.write('umbrella: RESTRAINT ARG=%s KAPPA=%s AT=%s \n' %(
                 ','.join([ 'ic%i' %i for i in range(len(enhanced['ickinds'])) ]),
@@ -758,8 +750,12 @@ class Yaff(AtomisticGenericJob):
             hdf5_input['generic/ffatype_ids'] = self.ffatype_ids
             if not self.enhanced is None:
                 grp = hdf5_input.create_group('generic/enhanced')
-                for k,v in self.enhanced.items():
-                    grp[k] = v
+                try:
+                    for k,v in self.enhanced.items():
+                        grp[k] = v
+                except TypeError:
+                    print(k,v)
+                    raise TypeError('Could not save this data to h5 file.')
 
     def from_hdf(self, hdf=None, group_name=None):
         super(Yaff, self).from_hdf(hdf=hdf, group_name=group_name)
@@ -773,10 +769,10 @@ class Yaff(AtomisticGenericJob):
             if "enhanced" in hdf5_input['generic'].keys():
                 self.enhanced = {}
                 for key,val in hdf5_input['generic/enhanced'].items():
-                    if key=='ickinds':
-                        self.enhanced[key] = np.char.decode(val)
-                    else:
-                        self.enhanced[key] = val
+                    #if key=='ickinds':
+                    #    self.enhanced[key] = np.char.decode(val)
+                    #else:
+                    self.enhanced[key] = val
 
     def get_structure(self, iteration_step=-1, wrap_atoms=True):
         """

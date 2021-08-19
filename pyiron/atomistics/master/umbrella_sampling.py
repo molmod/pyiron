@@ -2,18 +2,12 @@
 import numpy as np
 import matplotlib.pyplot as pt
 from molmod.units import *
-import subprocess, os, stat
+import subprocess, os, stat, warnings
 
 from pyiron.base.settings.generic import Settings
 from pyiron.atomistics.master.parallel import AtomisticParallelMaster
 from pyiron.base.master.parallel import JobGenerator
 from pyiron.atomistics.structure.atoms import Atoms
-
-
-try:
-    from plumed import Plumed
-except:
-    raise ImportError("Could not import the PLUMED python wrapper!")
 
 
 s = Settings()
@@ -44,29 +38,29 @@ class USJobGenerator(JobGenerator):
 
         # Create parameter list
         parameter_lst = []
-        for n,loc in enumerate(self._job.input['cv_grid']):
-            parameter_lst.append([n, np.round(loc,5)])
+        #for (loc,structure) in zip(self._job.input['cv_grid'],self._job.structures):
+        #    parameter_lst.append([np.round(loc,5), structure])
+        # Don't parse structures, this makes the job submission very slow and buggy
+        for n,_ in enumerate(self._job.input['cv_grid']):
+            parameter_lst.append([n])
         return parameter_lst
 
     @staticmethod
     def job_name(parameter):
-        if isinstance(parameter[1], list) or isinstance(parameter[1], np.ndarray):
-            return 'us_' + '__'.join([str(loc).replace('.', '_').replace('-', 'm') for loc in parameter[1]])
-        else:
-            return 'us_' + str(parameter[1]).replace('.', '_').replace('-', 'm')
+        return 'us_{}'.format(parameter[0]) # avoid minus signs by just using index
 
     def modify_job(self, job, parameter):
-        # For now, no different kappa for different locs implementation!
-        job.input['temp'] = self._job.input['temp']
-
-        if self._job.ref_job is not None:
-            job.structure = self._job.ref_job.get_structure(self._job.ref_job_idx[parameter[0]])
+        if self._job.traj_job is not None:
+            job.structure = self._job.traj_job.get_structure(self._job.traj_job_idx[parameter[0]])
         elif self._job.ref_f is not None:
-            job.structure = self._job.ref_f(self.ref_job.structure,parameter[1])
+            job.structure = self._job.ref_f(self.ref_job.structure,  self._job.input['cv_grid'][parameter[0]])
         else:
-            raise ValueError('Please specify the structures through generate_structures_traj() or generate_structures_ref().')
+            warnings.warn("You did not provide a trajectory or cv function, so each US simulation will start from the initial structure!")
+            assert self.ref_job.structure is not None
+            job.structure = self.ref_job.structure
 
-        job.set_us(self._job.input['cvs'], self._job.input['kappa'], parameter[0], fn_colvar='COLVAR', stride=self._job.input['stride'], temp=self._job.input['temp'])
+        job.set_us(self._job.input['cvs'], self._job.input['kappas'][parameter[0]], self._job.input['cv_grid'][parameter[0]],
+                                          fn_colvar='COLVAR', stride=self._job.input['stride'], temp=self._job.input['temp'])
         return job
 
 
@@ -86,7 +80,7 @@ class US(AtomisticParallelMaster):
         self.input['kappa']       = (1.*kjmol, 'force constant of the harmonic bias potential')
         self.input['stride']      = (10, 'step for output printed to COLVAR output file.')
         self.input['temp']        = (300*kelvin, 'the system temperature')
-        self.input['cv_grid']     = (list(np.linspace(0,1,10)), 'cv grid, has to be a list')
+        self.input['cv_grid']     = ([0], 'cv grid')
         self.input['cvs']         = ([('distance', [0,1])], 'cv(s), see set_us() for a Yaff job for description')
 
         self.input['h_min']       = (None , 'lowest value(s) of the cv(s) for WHAM')
@@ -96,13 +90,13 @@ class US(AtomisticParallelMaster):
         self.input['periodicity'] = (None , 'periodicity of cv(s)')
         self.input['tol']         = (0.00001 , 'WHAM converges if free energy changes < tol')
 
-        self.ref_job = None   # reference job with trajectory
-        self.ref_job_idx = None   # idx which are selected by generate_structures_traj
-        self.ref_f = None   # function to transform template structure to structure with correct cv
+        self.traj_job = None       # reference job with trajectory, does need to be initialized, it is automatically an attribute
+        self.traj_job_idx = None   # idx which are selected by generate_structures_traj
+        self.ref_f = None          # function to transform template structure to structure with correct cv
 
         self._job_generator = USJobGenerator(self)
 
-    def set_us(self,cvs,kappa,cv_grid,stride=10,temp=300*kelvin,h_min=None,h_max=None,h_bins=None,periodicity=None,tol=0.00001):
+    def set_us(self,cvs,kappas,cv_grid,stride=10,temp=300*kelvin,h_min=None,h_max=None,h_bins=None,periodicity=None,tol=0.00001):
         '''
             Setup an Umbrella sampling run using PLUMED along the internal coordinates
             defined in the CVs argument.
@@ -126,12 +120,12 @@ class US(AtomisticParallelMaster):
 
                         cvs = [('distance', [2,4])]
 
-            kappa   the value of the force constant of the harmonic bias potential,
-                    can be a single value (the harmonic bias potential for each CV has identical kappa)
-                    or a list of values, one for each CV defined.
+            kappas  the value(s) of the force constant of the harmonic bias potential,
+                    requires a dimension of (-1,len(cvs))
+                    if the dimension is (len(cvs),) the kappa value will be identical for all locs
 
             cv_grid
-                    the locations of the umbrellas, should be a list
+                    the locations of the umbrellas
 
             stride  the number of steps after which the internal coordinate
                     values and bias are printed to the COLVAR output file.
@@ -151,7 +145,7 @@ class US(AtomisticParallelMaster):
         '''
 
         self.input['cvs']         = cvs
-        self.input['kappa']       = kappa
+        self.input['kappas']      = np.asarray(kappas).tolist() # input attributes can't be numpy arrays, but can be lists
         self.input['cv_grid']     = np.asarray(cv_grid).tolist()
         self.input['stride']      = stride
         self.input['temp']        = temp
@@ -159,7 +153,9 @@ class US(AtomisticParallelMaster):
         # Check if cv_grid is well defined
         try:
             _ = iter(self.input['cv_grid'])
-            if isinstance(self.input['cv_grid'],str): raise TypeError
+            if isinstance(self.input['cv_grid'],str):
+                print(self.input['cv_grid'])
+                raise TypeError
         except TypeError:
             raise InputError('Your cv_grid is not iterable! Please define a proper cv_grid.')
 
@@ -172,21 +168,39 @@ class US(AtomisticParallelMaster):
         except AssertionError:
             raise InputError('Your cv_grid has the wrong shape. It should either be a flat array/list or an array with shape (N,#cvs)')
 
+        # Check the shape of kappas
+        try:
+            shape = np.asarray(self.input['kappas']).shape
+            if len(shape)==0: # if it is just a number
+                warnings.warn('You only provided a single kappa value. All kappa values will be equal to this value.')
+                self.input['kappas'] = (np.ones((len(self.input['cv_grid']),len(self.input['cvs']))) * self.input['kappas']).tolist()
+            else:
+                assert shape[-1]==len(self.input['cvs'])
+                if len(shape)==1:
+                    warnings.warn('You only provided a single kappa value for each cv. The kappa values at each location will be equal to these values.')
+                    self.input['kappas'] = (np.ones((len(self.input['cv_grid']),len(self.input['cvs']))) * self.input['kappas']).tolist()
+                elif len(shape)>1:
+                    assert len(shape)==2
+                    assert shape[0]==len(self.input['cv_grid'])
+        except AssertionError:
+            raise InputError('Your kappas has the wrong shape. It should either be a flat array/list or an array with shape (N,#cvs) or (#cvs,)')
+
+
         if h_min is None:
             if len(cvs)>1:
-                h_min = np.array([np.min(cvg) for cvg in cv_grid])
+                h_min = np.array([np.min(cvg) for cvg in cv_grid]).tolist()
             else:
                 h_min = np.min(cv_grid)
 
         if h_max is None:
             if len(cvs)>1:
-                h_max = np.array([np.max(cvg) for cvg in cv_grid])
+                h_max = np.array([np.max(cvg) for cvg in cv_grid]).tolist()
             else:
                 h_max = np.max(cv_grid)
 
         if h_bins is None:
             if len(cvs)>1:
-                h_bins = np.array([len(cvg) for cvg in cv_grid])
+                h_bins = np.array([len(cvg) for cvg in cv_grid]).tolist()
             else:
                 h_bins = len(cv_grid)
 
@@ -196,6 +210,7 @@ class US(AtomisticParallelMaster):
 
         self.input['periodicity'] = periodicity
         self.input['tol']         = tol
+
 
     def generate_structures_traj(self,job,cv_f):
         '''
@@ -214,8 +229,8 @@ class US(AtomisticParallelMaster):
             idx[n] = np.argmin(np.linalg.norm(loc-cv,axis=-1))
             max_deviation = max(max_deviation,np.linalg.norm(loc-cv,axis=-1)[idx[n]])
         print('The largest deviation is equal to {}'.format(max_deviation))
-        self.ref_job = job
-        self.ref_job_idx = idx
+        self.traj_job = job
+        self.traj_job_idx = idx
 
     def generate_structures_ref(self,f):
         '''
@@ -226,6 +241,7 @@ class US(AtomisticParallelMaster):
             f     function object f(structure, cv) that takes the reference structure object and a cv change as input and returns the altered structure
         '''
 
+        # Ref job corresponds to template
         assert self.ref_job.structure is not None
         self.ref_f = f
 
@@ -361,3 +377,9 @@ class US(AtomisticParallelMaster):
         with self.project_hdf5.open('output') as hdf5_out:
             hdf5_out['bins'] = bins
             hdf5_out['fes'] = fes
+
+    def restart(self):
+        for job in self.iter_jobs():
+            if not job.status.finished:
+                job.run(delete_existing_job=True)
+        self.run_static() # refresh state
