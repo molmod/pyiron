@@ -27,7 +27,7 @@ def write_full_environ_var(env_loc=None,location='~/'):
             if not lines[-1]=='\n': outfile.write('\n')
             outfile.write("# PYIRON env variables for pyiron file locations\n")
             outfile.write("export PYIRONRESOURCEPATHS={}\n".format(os.path.join(full_path,'pyiron/resources')))
-            outfile.write("export PYIRONPROJECTPATHS={}\n".format(fos.path.join(full_path,'pyiron/projects')))
+            outfile.write("export PYIRONPROJECTPATHS={}\n".format(os.path.join(full_path,'pyiron/projects')))
         print('Please source the .bashrc after the initial configuration or reset your terminal.')
         print('')
         print('$ source ~/.bashrc')
