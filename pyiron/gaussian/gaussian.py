@@ -690,7 +690,7 @@ def fchk2dict(fchk):
         num_frames_per_point =  fchk.fields.get('Optimization Number of geometries')
 
         opt_coords = np.zeros((len(num_frames_per_point),len(fchkdict['structure/numbers']),3))
-        opt_energies = np.zeros((len(num_frames_per_point),len(fchkdict['structure/numbers'])))
+        opt_energies = np.zeros(len(num_frames_per_point))
         opt_gradients = np.zeros((len(num_frames_per_point),len(fchkdict['structure/numbers']),3))
 
         for i,num in enumerate(num_frames_per_point):

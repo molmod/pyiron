@@ -676,6 +676,33 @@ class Yaff(AtomisticGenericJob):
         self.ffatypes = system.ffatypes.copy()
         self.ffatype_ids = system.ffatype_ids.copy()
 
+
+    def set_ffpars(self,fnames=[],ffpars=None):
+        '''
+            Set the ffpars attribute by providing a list of file names "fnames" which are appended
+            or provide the full string which can for instance be created by reading the pars files:
+
+            with open(os.path.join(pr.path, 'pars.txt'), 'r') as f:
+                ffpars = f.read()
+        '''
+
+        if not sum([fnames==[], ffpars is None])==1:
+            raise IOError('Exactly one of fnames and ffpars should be defined')
+
+        # Create the ffpars from the fnames if ffpars was not provided as argument
+        if ffpars is None:
+            if not isinstance(fnames,list):
+                fnames = [fnames]
+            # Check if all filenames exist
+            assert all([os.path.isfile(fn) for fn in fnames])
+            ffpars = ''
+            for fn in fnames:
+                with open(fn,'r') as f:
+                    ffpars += f.read()
+
+        self.input['ffpars'] = ffpars
+
+
     def write_input(self):
         input_dict = {
             'jobtype': self.input['jobtype'],
@@ -703,7 +730,6 @@ class Yaff(AtomisticGenericJob):
             'timecon_thermo': self.input['timecon_thermo'],
             'timecon_baro': self.input['timecon_baro'],
             'enhanced': self.enhanced,
-
         }
 
         # Check whether there are inconsistencies in the parameter file
@@ -951,3 +977,5 @@ class Yaff(AtomisticGenericJob):
                 else:
                     if not parse_unit(units[unit_tuple]) == parse_unit(spl[2]): # from molmod.units
                         raise ValueError('There was a conflict with your force field parameter units, namely for {} which was defined as {} both {}. Make sure that every unit unique.'.format(unit_tuple,spl[2],units[unit_tuple]))
+
+        self.input['ffpars'] = '\n'.join(ffpars)
