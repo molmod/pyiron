@@ -5,8 +5,9 @@
 from __future__ import print_function
 
 from copy import copy
-import os
+import os, sys
 import posixpath
+from pathlib2 import Path
 from pyiron.base.settings.generic import Settings
 from six import string_types
 
@@ -183,10 +184,8 @@ class GenericPath(object):
     def _windows_path_to_unix_path(path):
         """
         Helperfunction to covert windows path into unix path
-
         Args:
             path (str): input path in windows or unix format
-
         Returns:
             str: output path in unix format
         """
@@ -197,6 +196,13 @@ class GenericPath(object):
             return linux_path
         else:
             return None
+
+    @staticmethod
+    def _resolve_path(path):
+        if not (sys.version_info.major < 3 and os.name == 'nt'):
+            return Path(path).expanduser().resolve().absolute().as_posix()
+        else:
+            return os.path.abspath(os.path.normpath(os.path.expanduser(path))).replace('\\', '/')
 
 
 class ProjectPath(GenericPath):
@@ -379,6 +385,7 @@ class ProjectPath(GenericPath):
             # else:
             #     raise ValueError(path, ' does not exist!')
             path = self._windows_path_to_unix_path(path)
+            path = self._resolve_path(path)
             root_path, project_path = self._get_project_from_path(path)
             return GenericPath(root_path, project_path)
         else:
