@@ -675,11 +675,10 @@ def fchk2dict(fchk):
     if fchkdict['jobtype'] in ['fopt','popt','fts','pts','fsaddle','psaddle']:
         if 'Opt point       1 Geometries' in fchk.fields.keys(): # IRC calculations also have the fopt jobtype, but not this key
             opt_coords = fchk.get_optimization_coordinates()
-            if fchk.fields.get('Optimization Reference Energy') is None: # this happens with new fchk version on e.g. kirlia
-                opt_energies = fchk.fields.get("Opt point       1 Results for each geome")[::2]
-            else:
-                opt_energies = fchk.fields.get('Optimization Reference Energy') + fchk.fields.get("Opt point       1 Results for each geome")[::2]
             opt_gradients = fchk.get_optimization_gradients()
+            opt_energies = fchk.fields.get("Opt point       1 Results for each geome")[::2]
+            if fchk.fields.get('Optimization Reference Energy') is not None: # this happens with new fchk version on e.g. kirlia
+                opt_energies += fchk.fields.get('Optimization Reference Energy')
             irc_path = None
         elif 'IRC point       1 Geometries' in fchk.fields.keys():
             opt_coords = np.reshape(fchk.fields.get('IRC point       1 Geometries'),(-1, len(fchkdict['structure/numbers']), 3))
@@ -707,8 +706,10 @@ def fchk2dict(fchk):
         for i,num in enumerate(num_frames_per_point):
             # Load every scan point
             coords = np.reshape(fchk.fields.get('Opt point {:7d} Geometries'.format(i+1)),(num, len(fchkdict['structure/numbers']), 3))
-            energies = fchk.fields.get('Opt point {:7d} Results for each geome'.format(i+1))[::2]
             gradients = np.reshape(fchk.fields.get('Opt point {:7d} Gradient at each geome'.format(i+1)),(num, len(fchkdict['structure/numbers']), 3))
+            energies = fchk.fields.get('Opt point {:7d} Results for each geome'.format(i+1))[::2]
+            if fchk.fields.get('Optimization Reference Energy') is not None: # this happens with new fchk version on e.g. kirlia
+                energies += fchk.fields.get('Optimization Reference Energy')
 
             # Store each scan in output h5
             fchkdict['structure/scan/positions/p{}'.format(i)] = coords/angstrom
