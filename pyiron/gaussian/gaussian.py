@@ -391,9 +391,13 @@ class Gaussian(GenericDFTJob):
         pt.show()
 
 
-    def animate_scan(self,index,spacefill=True,stride=1,center_of_mass=False,particle_size=0.5,plot_energy=False):
+    def animate_scan(self,index=None,spacefill=True,stride=1,center_of_mass=False,particle_size=0.5,plot_energy=False):
         '''
-        Animates the job if a trajectory is present
+        Animates a scan job. If index is None (default), a trajectory is created using the optimal geometry for
+        every frame of the scan. If index is not None, a trajectory is created for that specific frame index,
+        showing the geometry optimization at that scan frame.
+
+        Set plot_energy=True if you want the corresponding energy plot.
 
         Args:
             index (int): index of the frame in the scan trajectory
@@ -409,19 +413,26 @@ class Gaussian(GenericDFTJob):
         '''
         assert self.get('output/jobtype')=='scan'
 
-        if plot_energy:
+        if index is None:
+            energies = self.get('output/generic/energy_tot')
+            positions = self.get('output/generic/positions')
+        else:
             energies = self.get('output/structure/scan/energies/p{}'.format(index))
+            positions = self.get('output/structure/scan/positions/p{}'.format(index))
+
+        if plot_energy:
             pt.clf()
             pt.plot(energies,'bo--')
-            pt.xlabel('Opt steps')
+            if index is None:
+                pt.xlabel('Frame')
+            else:
+                pt.xlabel('Opt steps')
             pt.ylabel('Total energy [a.u.]')
             pt.show()
 
 
         # Create the trajectory object
-        positions = self.get('output/structure/scan/positions/p{}'.format(index))
         indices = self.output.indices
-
         max_pos = np.max(np.max(positions, axis=0), axis=0)
         max_pos[np.abs(max_pos) < 1e-2] = 10
         cell = np.eye(3) * max_pos

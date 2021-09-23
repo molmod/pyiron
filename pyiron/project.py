@@ -162,7 +162,7 @@ class Project(ProjectCore):
         - ‘US’:
         - ‘Horton’:
         - ‘QChem’:
-        - Raspa:
+        - ‘Raspa’:
 
         Args:
             job_type (str): job type can be ['StructureContainer’, ‘StructurePipeline’, ‘AtomisticExampleJob’,
