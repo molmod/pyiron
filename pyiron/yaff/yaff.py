@@ -240,6 +240,86 @@ md.run({nsteps})
     with open(posixpath.join(working_directory,'yscript.py'), 'w') as f:
         f.write(body)
 
+
+def write_scan(input_dict,working_directory='.'):
+    # Write target positions for each frame to the corresponding h5 file
+    scan_data = input_dict['scan']
+    h5_path = posixpath.join(working_directory,'structures.h5')
+    h5 = h5py.File(h5_path,mode='w')
+    grp = h5.create_group("scan")
+    grp['positions'] = scan_data['positions']
+    if not np.isnan(scan_data['rvecs']).any():
+        grp['rvecs'] = scan_data['rvecs']
+    h5.close()
+
+    # Write script file which reads and adapts h5 file with energy of each snapshot
+    body = """#! /usr/bin/python
+
+from molmod.units import *
+from yaff import *
+import h5py, numpy as np
+
+# Define scan iterator
+class ScanIntegrator(Iterative):
+    default_state = [
+        AttributeStateItem('counter'),
+        AttributeStateItem('epot'),
+        PosStateItem(),
+        VolumeStateItem(),
+        CellStateItem(),
+        EPotContribStateItem(),
+    ]
+
+    log_name = 'SCAN'
+
+    def __init__(self, ff, h5_path, state=None, hooks=None, counter0=1):
+        self.h5 = h5py.File(h5_path,mode='r')
+        self.do_cell = 'scan/rvecs' in self.h5
+        self.assign_structure(ff, self.h5, self.do_cell, 0)
+        Iterative.__init__(self, ff, state, hooks, counter0)
+
+    @staticmethod
+    def assign_structure(ff,h5,do_cell,counter):
+        ff.update_pos(h5['scan/positions'][counter])
+        if do_cell:
+            ff.update_rvecs(h5['scan/rvecs'][counter])
+
+    def initialize(self):
+        self.epot = self.ff.compute()
+        Iterative.initialize(self)
+
+    def propagate(self):
+        # counter0 should start from 1 since the counter is updated after evaluation
+        self.assign_structure(self.ff, self.h5, self.do_cell, self.counter)
+        self.epot = self.ff.compute()
+        Iterative.propagate(self)
+
+    def finalize(self):
+        self.h5.close()
+
+
+#Setting up system and force field
+system = System.from_file('system.chk')
+ff = ForceField.generate(system, 'pars.txt', rcut={rcut}*angstrom, alpha_scale={alpha_scale}, gcut_scale={gcut_scale}, smooth_ei={smooth_ei})
+
+#Setting up output
+f = h5py.File('output.h5', mode='w')
+hdf5 = HDF5Writer(f, step=1)
+
+#Setting up simulation
+scan = ScanIntegrator(ff,'structures.h5',hooks=[hdf5])
+scan.run({steps})
+
+    """.format(
+        rcut=input_dict['rcut']/angstrom, alpha_scale=input_dict['alpha_scale'],
+        gcut_scale=input_dict['gcut_scale'], smooth_ei=input_dict['smooth_ei'],
+        steps=scan_data['positions'].shape[0]-1
+    )
+
+
+    with open(posixpath.join(working_directory,'yscript.py'), 'w') as f:
+        f.write(body)
+
 def write_plumed_enhanced(input_dict,working_directory='.'):
     #make copy of input_dict['enhanced'] that includes lower case definitions
     #(allowing for case insenstive definition of input_dict['enhanced'])
@@ -485,6 +565,36 @@ class Yaff(AtomisticGenericJob):
                                   temperature_damping_timescale=timecon_thermo,
                                   pressure_damping_timescale=timecon_baro)
 
+    def calc_scan(self, adapt_structure, range_min, range_max, range_step):
+        '''
+            Set a scan calculation within Yaff.
+
+            **Arguments**
+
+            adapt_structure (function): function which takes a structure object and target value used to identify the structure
+            range_min (float): minimum of range (included)
+            range_max (float): maximum of range (included)
+            range_step (float): Step size between two target values
+        '''
+
+        self.input['jobtype'] = 'scan'
+
+        grid = np.arange(range_min, range_max+range_step, range_step)
+        positions = np.zeros((len(grid),*self.structure.positions.shape))
+        rvecs = np.zeros((len(grid),3,3))
+        for n,val in enumerate(grid):
+            adapted_structure = adapt_structure(self.structure,val)
+            positions[n] = adapted_structure.positions * angstrom
+            rvecs[n] = adapted_structure.cell * angstrom if adapted_structure.cell.volume>0 else np.nan
+
+        self.scan = {
+        'range_min'  : range_min,
+        'range_max'  : range_max,
+        'range_step' : range_step,
+        'positions'  : positions,
+        'rvecs'  : rvecs
+        }
+
     def load_chk(self, fn, bonds_dict=None):
         '''
             Load the atom types, atom type ids and structure by reading a .chk file.
@@ -523,6 +633,7 @@ class Yaff(AtomisticGenericJob):
             self.ffatype_ids = system.ffatype_ids
         system.detect_bonds(bonds_dict)
         self.bonds = system.bonds
+
 
     def set_mtd(self, ics, height, sigma, pace, fn='HILLS', fn_colvar='COLVAR', stride=10, temp=300):
         '''
@@ -730,6 +841,7 @@ class Yaff(AtomisticGenericJob):
             'timecon_thermo': self.input['timecon_thermo'],
             'timecon_baro': self.input['timecon_baro'],
             'enhanced': self.enhanced,
+            'scan': self.scan,
         }
 
         # Check whether there are inconsistencies in the parameter file
@@ -754,6 +866,8 @@ class Yaff(AtomisticGenericJob):
             write_ynvt(input_dict=input_dict,working_directory=self.working_directory)
         elif self.input['jobtype'] == 'npt':
             write_ynpt(input_dict=input_dict,working_directory=self.working_directory)
+        elif self.input['jobtype'] == 'scan':
+            write_scan(input_dict=input_dict,working_directory=self.working_directory)
         else:
             raise IOError('Invalid job type for Yaff job, received %s' %self.input['jobtype'])
         if not self.enhanced is None:
@@ -782,6 +896,14 @@ class Yaff(AtomisticGenericJob):
                 except TypeError:
                     print(k,v)
                     raise TypeError('Could not save this data to h5 file.')
+            if not self.scan is None:
+                grp = hdf5_input.create_group('generic/scan')
+                try:
+                    for k,v in self.scan.items():
+                        grp[k] = v
+                except TypeError:
+                    print(k,v)
+                    raise TypeError('Could not save this data to h5 file.')
 
     def from_hdf(self, hdf=None, group_name=None):
         super(Yaff, self).from_hdf(hdf=hdf, group_name=group_name)
@@ -799,6 +921,13 @@ class Yaff(AtomisticGenericJob):
                     #    self.enhanced[key] = np.char.decode(val)
                     #else:
                     self.enhanced[key] = val
+            if "scan" in hdf5_input['generic'].keys():
+                self.scan = {}
+                for key,val in hdf5_input['generic/scan'].items():
+                    #if key=='ickinds':
+                    #    self.enhanced[key] = np.char.decode(val)
+                    #else:
+                    self.scan[key] = val
 
     def get_structure(self, iteration_step=-1, wrap_atoms=True):
         """

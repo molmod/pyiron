@@ -29,14 +29,18 @@ case $name in
 
     nano)
         location=$VSC_SCRATCH_KYUKON
-        folder="nanoscale/"
-        ln -s $location scratch
+        folder=""
+        if [ ! -f "scratch" ]; then
+            ln -s $location scratch
+        fi
         ;;
 
     atnmol)
         location=$VSC_SCRATCH_KYUKON
-        folder="atnmol/"
-        ln -s $location scratch
+        folder=""
+        if [ ! -f "scratch" ]; then
+            ln -s $location scratch
+        fi
         ;;
 esac
 
