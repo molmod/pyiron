@@ -8,35 +8,41 @@ import stat
 import urllib.request as urllib2
 from pathlib import Path
 
-location = sys.argv[1]
-folder = sys.argv[2]
-
-def write_environ_var(full_path,var,path,replace=False):
+def write_environ_var(full_path,var,path,replace=False,prepend="",append=""):
     """
         Write the environment variable (var) equal to full_path+path
         If it already exists either append it (default) or replace it (replace=True)
     """
     new_path = os.path.join(full_path,path)
-    with open(os.path.expanduser("~/.bashrc"), "r") as bashrc:
-        if var in os.environ:
-            # check if the environment variable already contains the path we are giving
-            environ_paths = os.environ[var].split[':']
-            if new_path in environ_paths:
-                pass
+    if var in os.environ:
+        # check if the environment variable already contains the path we are giving
+        environ_paths = os.environ[var].split(':')
+        if new_path in environ_paths:
+            pass
+        else:
+            new_bashrc = ""
+            old_var = "export {}={}".format(var,os.environ[var])
+            if replace:
+                new_var = "export {}={}".format(var,"{}".format(new_path))
             else:
-                new_bashrc = ""
-                old_var = "export {}={}".format(var,os.environ[var])
-                if replace:
-                    new_var = "export {}={}".format(var,"{}".format(new_path))
-                else:
-                    new_var = "export {}={}".format(var,os.environ[var]+":{}".format(new_path))
+                new_var = "export {}={}".format(var,os.environ[var]+":{}".format(new_path))
+            new_var = prepend+new_var+append
+
+            with open(os.path.expanduser("~/.bashrc"), "r") as bashrc:
                 for line in bashrc:
                     line = line.rstrip()
                     changes = line.replace(old_var, new_var)
                     new_bashrc += changes + "\n"
-        else:
-            # add paths
-            outfile.write("export {}={}\n".format(var,new_path))
+
+            st = os.stat(os.path.expanduser("~/.bashrc"))
+            with open(os.path.expanduser("~/.bashrc"), "w") as bashrc:
+                bashrc.write(new_bashrc)
+            os.chmod(os.path.expanduser("~/.bashrc"), st.st_mode)
+
+    else:
+        # add paths
+        with open(os.path.expanduser("~/.bashrc"), "a") as bashrc:
+            bashrc.write(prepend + "export {}={}\n".format(var,new_path) + append)
 
 
 def write_full_environ_var(env_loc=None,location='~/'):
@@ -47,12 +53,9 @@ def write_full_environ_var(env_loc=None,location='~/'):
         full_path = '$' + env_loc + '/' + location # this should be correctly expanded by the shell
         download_path = os.environ[env_loc]+'/'+location
 
-    write_environ_var(full_path,'PYIRONPROJECTPATHS','pyiron/projects')
+    write_environ_var(full_path,'PYIRONPROJECTPATHS','pyiron/projects',prepend='\n')
     # replace the resource_paths, since it will automatically read the first
-    write_environ_var(full_path,'PYIRONRESOURCEPATHS','pyiron/resources',replace=True)
-
-    with open(os.path.expanduser("~/.bashrc"), "a") as outfile:
-        if not lines[-1]=='\n': outfile.write('\n')
+    write_environ_var(full_path,'PYIRONRESOURCEPATHS','pyiron/resources',replace=True,append='\n')
 
     print('Please source the .bashrc or reset your terminal.')
     print('')
@@ -112,6 +115,12 @@ def download_resources(
 ################################
 # MAIN
 
+location = sys.argv[1]
+try:
+    folder = sys.argv[2]
+except IndexError:
+    folder = None
+
 # Write the environment variables or append them with new paths
 download_path = write_full_environ_var(env_loc=None,location=location)
 
@@ -123,5 +132,5 @@ download_resources(zip_file="resources.zip",
                    git_folder_name="pyiron-resources-hpc_ugent")
 
 # Create the specified folder
-if not folder=="":
+if folder is not None:
     Path(os.path.join(download_path,'pyiron/projects',folder)).mkdir(parents=True, exist_ok=True)
