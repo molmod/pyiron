@@ -3,10 +3,10 @@
 echo "Welcome to the automatic pyiron installer."
 echo "For now this installer provides an automatic procedure for either PhD students or students following the courses:"
 
-courses=("phd" "nano" "atnmol")
+courses=("phd" "nano" "atmol")
 
 echo "    * Modelling and Engineering of Nanoscale Materials (nano)"
-echo "    * Atomic and Molecular Physics (atnmol)"
+echo "    * Atomic and Molecular Physics (atmol)"
 
 
 # Allow a selection of the course or phd setting
@@ -29,25 +29,25 @@ case $name in
 
     nano)
         location=$VSC_SCRATCH_KYUKON
-        folder=""
+        folder="nanoscale"
         if [ ! -f "scratch" ]; then
             ln -s $location scratch
         fi
         ;;
 
-    atnmol)
+    atmol)
         location=$VSC_SCRATCH_KYUKON
-        folder=""
+        folder="atmol"
         if [ ! -f "scratch" ]; then
             ln -s $location scratch
         fi
         ;;
 esac
 
-pyironlocation="$location/$folder"
+pyironlocation="$location"
 
 # Install pyiron at pyironlocation
-pyiron-installer.py $pyironlocation
+pyiron-installer.py $pyironlocation $folder
 
 # Activate VASP potentials for phd students
 case $name in

@@ -9,6 +9,35 @@ import urllib.request as urllib2
 from pathlib import Path
 
 location = sys.argv[1]
+folder = sys.argv[2]
+
+def write_environ_var(full_path,var,path,replace=False):
+    """
+        Write the environment variable (var) equal to full_path+path
+        If it already exists either append it (default) or replace it (replace=True)
+    """
+    new_path = os.path.join(full_path,path)
+    with open(os.path.expanduser("~/.bashrc"), "r") as bashrc:
+        if var in os.environ:
+            # check if the environment variable already contains the path we are giving
+            environ_paths = os.environ[var].split[':']
+            if new_path in environ_paths:
+                pass
+            else:
+                new_bashrc = ""
+                old_var = "export {}={}".format(var,os.environ[var])
+                if replace:
+                    new_var = "export {}={}".format(var,"{}".format(new_path))
+                else:
+                    new_var = "export {}={}".format(var,os.environ[var]+":{}".format(new_path))
+                for line in bashrc:
+                    line = line.rstrip()
+                    changes = line.replace(old_var, new_var)
+                    new_bashrc += changes + "\n"
+        else:
+            # add paths
+            outfile.write("export {}={}\n".format(var,new_path))
+
 
 def write_full_environ_var(env_loc=None,location='~/'):
     if env_loc is None:
@@ -18,21 +47,16 @@ def write_full_environ_var(env_loc=None,location='~/'):
         full_path = '$' + env_loc + '/' + location # this should be correctly expanded by the shell
         download_path = os.environ[env_loc]+'/'+location
 
-    # Check whether bashrc already contains PYIRON variables, this can happen if bashrc has not been sourced yet
-    with open(os.path.expanduser("~/.bashrc"), "r") as outfile:
-        lines = outfile.readlines()
-    if not any(['PYIRON' in line for line in lines]):
-        # Write to bashrc
-        with open(os.path.expanduser("~/.bashrc"), "a") as outfile:
-            if not lines[-1]=='\n': outfile.write('\n')
-            outfile.write("# PYIRON env variables for pyiron file locations\n")
-            outfile.write("export PYIRONRESOURCEPATHS={}\n".format(os.path.join(full_path,'pyiron/resources')))
-            outfile.write("export PYIRONPROJECTPATHS={}\n".format(os.path.join(full_path,'pyiron/projects')))
-        print('Please source the .bashrc after the initial configuration or reset your terminal.')
-        print('')
-        print('$ source ~/.bashrc')
-    else:
-        raise SystemError('Your .bashrc already has pyiron environment variables but has not been sourced. Please execute the following in your bash shell if you are certain these are defined correctly: source ~/.bashrc')
+    write_environ_var(full_path,'PYIRONPROJECTPATHS','pyiron/projects')
+    # replace the resource_paths, since it will automatically read the first
+    write_environ_var(full_path,'PYIRONRESOURCEPATHS','pyiron/resources',replace=True)
+
+    with open(os.path.expanduser("~/.bashrc"), "a") as outfile:
+        if not lines[-1]=='\n': outfile.write('\n')
+
+    print('Please source the .bashrc or reset your terminal.')
+    print('')
+    print('$ source ~/.bashrc')
 
     return download_path
 
@@ -72,14 +96,10 @@ def download_resources(
     temp_zip_file = os.path.join(temp_directory, zip_file)
     temp_extract_folder = os.path.join(temp_directory, git_folder_name)
     urllib2.urlretrieve(giturl_for_zip_file, temp_zip_file)
-    if os.path.exists(user_directory):
-        raise ValueError(
-            "The resource directory exists already, therefore it can not be created: ",
-            user_directory,
-        )
+
     with ZipFile(temp_zip_file) as zip_file_object:
         zip_file_object.extractall(temp_directory)
-    copytree(temp_extract_folder, user_directory)
+    copytree(temp_extract_folder, user_directory, dirs_exist_ok=True)
     if os.name != "nt":  #
         for root, dirs, files in os.walk(user_directory):
             for file in files:
@@ -89,10 +109,19 @@ def download_resources(
     os.remove(temp_zip_file)
     rmtree(temp_extract_folder)
 
+################################
+# MAIN
 
+# Write the environment variables or append them with new paths
 download_path = write_full_environ_var(env_loc=None,location=location)
+
+# Download resources and overwrite them if they already exist
 download_resources(zip_file="resources.zip",
                    resource_directory=os.path.join(download_path,'pyiron/resources'),
                    projects_directory=os.path.join(download_path,'pyiron/projects'),
                    giturl_for_zip_file="https://github.com/SanderBorgmans/pyiron-resources/archive/hpc_ugent.zip",
                    git_folder_name="pyiron-resources-hpc_ugent")
+
+# Create the specified folder
+if not folder=="":
+    Path(os.path.join(download_path,'pyiron/projects',folder)).mkdir(parents=True, exist_ok=True)
