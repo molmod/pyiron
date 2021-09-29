@@ -565,34 +565,37 @@ class Yaff(AtomisticGenericJob):
                                   temperature_damping_timescale=timecon_thermo,
                                   pressure_damping_timescale=timecon_baro)
 
-    def calc_scan(self, adapt_structure, range_min, range_max, range_step):
+    def calc_scan(self, grid, adapt_structure=None, structures=None):
         '''
             Set a scan calculation within Yaff.
 
             **Arguments**
-
+            grid (list/array): used as reference, and as input for the adapt structure function if provided
             adapt_structure (function): function which takes a structure object and target value used to identify the structure
-            range_min (float): minimum of range (included)
-            range_max (float): maximum of range (included)
-            range_step (float): Step size between two target values
+            structures (list of structure objects): instead of the adapt_structure function,
+                                                    you can also provide the list of structures separately
         '''
 
         self.input['jobtype'] = 'scan'
 
-        grid = np.arange(range_min, range_max+range_step, range_step)
         positions = np.zeros((len(grid),*self.structure.positions.shape))
         rvecs = np.zeros((len(grid),3,3))
+
+        assert bool(adapt_structure is None) ^ bool(structures is None) # XOR operator (a and not b) or (b and not a)
+
         for n,val in enumerate(grid):
-            adapted_structure = adapt_structure(self.structure,val)
-            positions[n] = adapted_structure.positions * angstrom
-            rvecs[n] = adapted_structure.cell * angstrom if adapted_structure.cell.volume>0 else np.nan
+            if adapt_structure is not None:
+                adapted_structure = adapt_structure(self.structure,val)
+                positions[n] = adapted_structure.positions
+                rvecs[n] = adapted_structure.cell if adapted_structure.cell.volume>0 else np.nan
+            else:
+                positions[n] = structures[n].positions
+                rvecs[n] = structures[n].cell if structures[n].cell.volume>0 else np.nan
 
         self.scan = {
-        'range_min'  : range_min,
-        'range_max'  : range_max,
-        'range_step' : range_step,
-        'positions'  : positions,
-        'rvecs'  : rvecs
+        'grid'       : grid,
+        'positions'  : positions * angstrom,
+        'rvecs'      : rvecs * angstrom
         }
 
     def load_chk(self, fn, bonds_dict=None):
