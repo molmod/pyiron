@@ -38,9 +38,6 @@ class USJobGenerator(JobGenerator):
 
         # Create parameter list
         parameter_lst = []
-        #for (loc,structure) in zip(self._job.input['cv_grid'],self._job.structures):
-        #    parameter_lst.append([np.round(loc,5), structure])
-        # Don't parse structures, this makes the job submission very slow and buggy
         for n,_ in enumerate(self._job.input['cv_grid']):
             parameter_lst.append([n])
         return parameter_lst
@@ -81,7 +78,7 @@ class US(AtomisticParallelMaster):
         self.input['stride']      = (10, 'step for output printed to COLVAR output file.')
         self.input['temp']        = (300*kelvin, 'the system temperature')
         self.input['cv_grid']     = ([0], 'cv grid')
-        self.input['cvs']         = ([('distance', [0,1])], 'cv(s), see set_us() for a Yaff job for description')
+        self.input['cvs']         = ([('distance', [0,1])], 'cv(s), see set_us() for description')
 
         self.input['h_min']       = (None , 'lowest value(s) of the cv(s) for WHAM')
         self.input['h_max']       = (None , 'highest value(s) of the cv(s) for WHAM')
