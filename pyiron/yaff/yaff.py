@@ -617,6 +617,9 @@ class Yaff(AtomisticGenericJob):
         system.set_standard_masses()
         if len(system.pos.shape)!=2:
             raise IOError("Something went wrong, positions in CHK file %s should have Nx3 dimensions" %fn)
+        self.load_system(system,bonds_dict=bonds_dict)
+
+    def load_system(self,system,bonds_dict=None):
         if system.cell.rvecs is not None and len(system.cell.rvecs)>0:
             self.structure = Atoms(
                 positions=system.pos.copy()/angstrom,
@@ -636,7 +639,6 @@ class Yaff(AtomisticGenericJob):
             self.ffatype_ids = system.ffatype_ids
         system.detect_bonds(bonds_dict)
         self.bonds = system.bonds
-
 
     def set_mtd(self, ics, height, sigma, pace, fn='HILLS', fn_colvar='COLVAR', stride=10, temp=300):
         '''
