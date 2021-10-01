@@ -14,7 +14,7 @@ class RDF(object):
     This is a generic module to construct a radial distribution function based on a job object.
     With the RDF object you can plot the rdf and the cdf, and calculate the coordination numbers.
     """
-    def __init__(self,job,atom_1,atom_2,rcut=20*angstrom,rspacing=0.01*angstrom,nimage=1,start=0,stop=-1,nf=0,save=False,atomic_units=False):
+    def __init__(self,job,atom_1,atom_2,rcut=20*angstrom,rspacing=0.01*angstrom,nimage=1,start=0,stop=-1,nf=0,save=False,atomic_units=False,suffix=None):
         ''' Computes RDF for two atoms: atom_1 and atom_2.
 
             **Arguments:**
@@ -69,6 +69,8 @@ class RDF(object):
 
         if save:
             # Write out a data file containing the radial distance (column 1), the value of the RDF g(r) (column 2)  and the value of the rho g(r) (column 3)
+            if suffix is None:
+                suffix = "{}{}".format(atom_1,atom_2)
             g = open(self.job.working_directory + 'RDF_' + suffix + '.dat', 'w')
             g.write('# Distance \tRDF \tCRDF \n')
             for i in xrange(len(self.d)):
