@@ -486,7 +486,7 @@ class Yaff(AtomisticGenericJob):
         self.bonds = None
         self.ffatypes = None
         self.ffatype_ids = None
-        self.enhanced = None  # should have more generic name e.g. enhanced
+        self.enhanced = None
 
 
     def calc_minimize(self, cell=False, gpos_tol=1e-8, dpos_tol=1e-6, grvecs_tol=1e-8, drvecs_tol=1e-6, max_iter=1000, n_print=5):
@@ -920,16 +920,10 @@ class Yaff(AtomisticGenericJob):
             if "enhanced" in hdf5_input['generic'].keys():
                 self.enhanced = {}
                 for key,val in hdf5_input['generic/enhanced'].items():
-                    #if key=='ickinds':
-                    #    self.enhanced[key] = np.char.decode(val)
-                    #else:
                     self.enhanced[key] = val
             if "scan" in hdf5_input['generic'].keys():
                 self.scan = {}
                 for key,val in hdf5_input['generic/scan'].items():
-                    #if key=='ickinds':
-                    #    self.enhanced[key] = np.char.decode(val)
-                    #else:
                     self.scan[key] = val
 
     def get_structure(self, iteration_step=-1, wrap_atoms=True):
