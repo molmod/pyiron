@@ -31,12 +31,11 @@ def write_chk(input_dict,working_directory='.'):
     cell = None
     if 'cell' in input_dict.keys() and input_dict['cell'] is not None and input_dict['cell'].volume > 0:
         cell = input_dict['cell']*angstrom
-    system = System(input_dict['numbers'], input_dict['pos']*angstrom, ffatypes=input_dict['ffatypes'], ffatype_ids=input_dict['ffatype_ids'], bonds=input_dict['bonds'], rvecs=cell)
+    system = System(input_dict['numbers'], input_dict['pos']*angstrom, ffatypes=input_dict['ffatypes'], ffatype_ids=input_dict['ffatype_ids'], bonds=input_dict['bonds'], rvecs=cell, masses=input_dict['masses']*amu)
 
     if input_dict['bonds'] is None:
         system.detect_bonds()
         print('Warning: no bonds could be read and were automatically detected.')
-    system.set_standard_masses()
     # write dictionary to MolMod CHK file
     system.to_file(posixpath.join(working_directory,'system.chk'))
 
@@ -487,6 +486,7 @@ class Yaff(AtomisticGenericJob):
         self.ffatypes = None
         self.ffatype_ids = None
         self.enhanced = None
+        self.scan = None
 
 
     def calc_minimize(self, cell=False, gpos_tol=1e-8, dpos_tol=1e-6, grvecs_tol=1e-8, drvecs_tol=1e-6, max_iter=1000, n_print=5):
@@ -614,7 +614,6 @@ class Yaff(AtomisticGenericJob):
         '''
 
         system = System.from_file(fn)
-        system.set_standard_masses()
         if len(system.pos.shape)!=2:
             raise IOError("Something went wrong, positions in CHK file %s should have Nx3 dimensions" %fn)
         self.load_system(system,bonds_dict=bonds_dict)
@@ -624,14 +623,14 @@ class Yaff(AtomisticGenericJob):
             self.structure = Atoms(
                 positions=system.pos.copy()/angstrom,
                 numbers=system.numbers,
-                masses=system.masses,
+                masses=system.masses/amu,
                 cell=system.cell.rvecs/angstrom,
             )
         else:
             self.structure = Atoms(
                 positions=system.pos.copy()/angstrom,
                 numbers=system.numbers,
-                masses=system.masses,
+                masses=system.masses/amu,
             )
         if system.ffatypes is not None:
             self.ffatypes = system.ffatypes
@@ -829,6 +828,7 @@ class Yaff(AtomisticGenericJob):
             'ffatype_ids': self.ffatype_ids,
             'ffpars': self.input['ffpars'],
             'pos': self.structure.positions,
+            'masses': self.structure.get_masses(),
             'rcut': self.input['rcut'],
             'alpha_scale': self.input['alpha_scale'],
             'gcut_scale': self.input['gcut_scale'],
@@ -1033,11 +1033,10 @@ class Yaff(AtomisticGenericJob):
         pos = struct.positions.reshape(-1,3)*angstrom
         cell = struct.cell
         if cell is not None and cell.volume>0:
-            system = System(numbers, pos, rvecs=cell*angstrom, ffatypes=self.ffatypes, ffatype_ids=self.ffatype_ids)
+            system = System(numbers, pos, rvecs=cell*angstrom, ffatypes=self.ffatypes, ffatype_ids=self.ffatype_ids,masses=struct.get_masses()*amu)
         else:
-            system = System(numbers, pos, ffatypes=self.ffatypes, ffatype_ids=self.ffatype_ids)
+            system = System(numbers, pos, ffatypes=self.ffatypes, ffatype_ids=self.ffatype_ids,masses=struct.get_masses()*amu) # get masses contains standard masses in atomic mass units
         system.detect_bonds()
-        system.set_standard_masses()
         return system
 
     def get_yaff_ff(self, system=None):
