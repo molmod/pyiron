@@ -566,7 +566,7 @@ class Yaff(AtomisticGenericJob):
             structures (list of structure objects): instead of the adapt_structure function,
                                                     you can also provide the list of structures separately
 
-            Example
+            **Example**
 
             grid = np.arange(0,181)
             def adapt_structure(structure,val):
@@ -647,7 +647,7 @@ class Yaff(AtomisticGenericJob):
             self.ffatypes = system.ffatypes
         if system.ffatype_ids is not None:
             self.ffatype_ids = system.ffatype_ids
-        if system.bonds is None or bond_dict is not None:
+        if system.bonds is None or bonds_dict is not None:
             # if bonds is None always detect bonds, if they are provided but a bond_dict is specified
             # it is implied the user wants to detect new bonds
             system.detect_bonds(bonds_dict)
