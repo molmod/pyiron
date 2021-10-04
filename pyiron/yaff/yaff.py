@@ -619,6 +619,8 @@ class Yaff(AtomisticGenericJob):
         self.load_system(system,bonds_dict=bonds_dict)
 
     def load_system(self,system,bonds_dict=None):
+        if system.masses is None:
+            system.set_standard_masses()
         if system.cell.rvecs is not None and len(system.cell.rvecs)>0:
             self.structure = Atoms(
                 positions=system.pos.copy()/angstrom,
