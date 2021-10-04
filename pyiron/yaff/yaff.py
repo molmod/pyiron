@@ -428,13 +428,6 @@ def hdf2dict(h5):
         hdict['generic/hessian'] = h5['system/hessian'][:]/(electronvolt/angstrom**2)
     return hdict
 
-def read_colvar(output_file,output_dict):
-    colvar_file = posixpath.join(output_file[:output_file.rfind('/')],'COLVAR')
-    if os.path.exists(colvar_file):
-        data = np.loadtxt(colvar_file)
-        output_dict['enhanced/time'] = data[:,0]
-        output_dict['enhanced/cv'] = data[:,1:-1]
-        output_dict['enhanced/bias'] = data[:,-1]
 
 def collect_output(output_file):
     # this routine basically reads and returns the output HDF5 file produced by Yaff
@@ -442,8 +435,6 @@ def collect_output(output_file):
     h5 = h5py.File(output_file, mode='r')
     # translate to dict
     output_dict = hdf2dict(h5)
-    # read colvar file if it is there
-    read_colvar(output_file,output_dict)
     return output_dict
 
 
@@ -574,6 +565,24 @@ class Yaff(AtomisticGenericJob):
             adapt_structure (function): function which takes a structure object and target value used to identify the structure
             structures (list of structure objects): instead of the adapt_structure function,
                                                     you can also provide the list of structures separately
+
+            Example
+
+            grid = np.arange(0,181)
+            def adapt_structure(structure,val):
+                s = structure.copy()
+                s.set_dihedral(0,1,2,3,angle=val)
+                return s
+
+            job.structure = ref_structure
+
+            Case 1: using adapt_structure
+            job.calc_scan(grid,adapt_structure=adapt_structure)
+
+            Case 2: manually specifying structures
+            structures = [adapt_structure(job.structure,val) for val in grid]
+            job.calc_scan(grid,structures=structures)
+
         '''
 
         self.input['jobtype'] = 'scan'
@@ -885,10 +894,24 @@ class Yaff(AtomisticGenericJob):
 
     def collect_output(self):
         output_dict = collect_output(output_file=posixpath.join(self.working_directory, 'output.h5'))
+
+        if self.enhanced is not None:
+            # Check if COLVAR file exists
+            if 'file_colvar' in self.enhanced and os.path.exists(posixpath.join(self.working_directory,self.enhanced['file_colvar'])):
+                data = np.loadtxt(posixpath.join(self.working_directory,self.enhanced['file_colvar']))
+                output_dict['enhanced/trajectory/time'] = data[:,0]
+                output_dict['enhanced/trajectory/cv'] = data[:,1:-1]
+                output_dict['enhanced/trajectory/bias'] = data[:,-1]
+
         with self.project_hdf5.open("output") as hdf5_output:
             for k, v in output_dict.items():
                 hdf5_output[k] = v
             hdf5_output['generic/indices'] = np.vstack([self.structure.indices] * output_dict['generic/positions'].shape[0])
+
+        if self.enhanced is not None:
+            # Check if HILLS file exists
+            if 'file' in self.enhanced and os.path.exists(posixpath.join(self.working_directory,self.enhanced['file'])):
+                self.mtd_sum_hills(fn_out='fes.dat') # calculate MTD free energy profile and store it
 
     def to_hdf(self, hdf=None, group_name=None):
         super(Yaff, self).to_hdf(hdf=hdf, group_name=group_name)
@@ -1038,7 +1061,7 @@ class Yaff(AtomisticGenericJob):
         pos = struct.positions.reshape(-1,3)*angstrom
         cell = struct.cell
         if cell is not None and cell.volume>0:
-            system = System(numbers, pos, rvecs=cell*angstrom, bonds=self.bonds ffatypes=self.ffatypes, ffatype_ids=self.ffatype_ids,masses=struct.get_masses()*amu)
+            system = System(numbers, pos, rvecs=cell*angstrom, bonds=self.bonds, ffatypes=self.ffatypes, ffatype_ids=self.ffatype_ids,masses=struct.get_masses()*amu)
         else:
             system = System(numbers, pos, bonds=self.bonds, ffatypes=self.ffatypes, ffatype_ids=self.ffatype_ids,masses=struct.get_masses()*amu) # get masses contains standard masses in atomic mass units
         if system.bonds is None:
@@ -1057,29 +1080,37 @@ class Yaff(AtomisticGenericJob):
         )
         return ff
 
-    def mtd_sum_hills_1d(self,fn=None):
+    def mtd_sum_hills(self,fn_out='fes.dat',settings=None):
         '''
             Creates a fes.dat file for plotting the free energy surface after a mtd simulation.
+            This is automatically performed for an mtd job.
+            If you need to integrate multiple hill files instead,
+            or specify certain arguments, you can use this function instead
 
             **Arguments**
 
-            fn      path to the hills file or hills files (comma separated)
+            fn         path to the hills file or hills files (comma separated)
+            settings   dictionary with settings for sum_hills command
         '''
 
-        if fn is None:
-            fn = posixpath.join(self.working_directory, self.enhanced['file'])
-        fn_out = posixpath.join(self.working_directory, 'fes.dat')
+        fn = posixpath.join(self.working_directory, self.enhanced['file'])
+        fn_out = posixpath.join(self.working_directory, fn_out)
 
         # Get plumed path for execution
         path = self.path+'_hdf5/'+self.name+'/'
         load_module = get_plumed_path()
         plumed_script = path+'plumed_job.sh'
 
+        if settings is not None:
+            kv = " ".join(["--{} {}".format(k,v) for k,v in settings])
+        else:
+            kv = ""
+
         with open(plumed_script,'w') as g:
             with open(load_module,'r') as f:
                 for line in f:
                     g.write(line)
-            g.write("plumed sum_hills --hills {} --outfile {}".format(fn,fn_out))
+                g.write("plumed sum_hills --hills {} --outfile {}".format(fn,fn_out) + kv)
 
         # Change permissions (equal to chmod +x)
         st = os.stat(plumed_script)
@@ -1088,6 +1119,16 @@ class Yaff(AtomisticGenericJob):
         # execute wham
         command = ['exec', plumed_script]
         out = s._queue_adapter._adapter._execute_command(command, split_output=False, shell=True)
+
+        # store data
+        data = np.loadtxt(fn_out)
+        dim = (data.shape[1]-1)//2
+        with self.project_hdf5.open("output") as hdf5_output:
+            grp = hdf5_output.create_group('enhanced/fes')
+            grp['bins'] = data[:,:dim]
+            grp['fes'] = data[:,dim]
+            grp['dfes'] = data[:,dim+1:]
+
 
     def check_ffpars(self):
         ffpars = self.input['ffpars'].split('\n')
