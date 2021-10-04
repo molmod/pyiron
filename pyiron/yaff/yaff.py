@@ -638,7 +638,10 @@ class Yaff(AtomisticGenericJob):
             self.ffatypes = system.ffatypes
         if system.ffatype_ids is not None:
             self.ffatype_ids = system.ffatype_ids
-        system.detect_bonds(bonds_dict)
+        if system.bonds is None or bond_dict is not None:
+            # if bonds is None always detect bonds, if they are provided but a bond_dict is specified
+            # it is implied the user wants to detect new bonds
+            system.detect_bonds(bonds_dict)
         self.bonds = system.bonds
 
     def set_mtd(self, ics, height, sigma, pace, fn='HILLS', fn_colvar='COLVAR', stride=10, temp=300):
@@ -1035,10 +1038,11 @@ class Yaff(AtomisticGenericJob):
         pos = struct.positions.reshape(-1,3)*angstrom
         cell = struct.cell
         if cell is not None and cell.volume>0:
-            system = System(numbers, pos, rvecs=cell*angstrom, ffatypes=self.ffatypes, ffatype_ids=self.ffatype_ids,masses=struct.get_masses()*amu)
+            system = System(numbers, pos, rvecs=cell*angstrom, bonds=self.bonds ffatypes=self.ffatypes, ffatype_ids=self.ffatype_ids,masses=struct.get_masses()*amu)
         else:
-            system = System(numbers, pos, ffatypes=self.ffatypes, ffatype_ids=self.ffatype_ids,masses=struct.get_masses()*amu) # get masses contains standard masses in atomic mass units
-        system.detect_bonds()
+            system = System(numbers, pos, bonds=self.bonds, ffatypes=self.ffatypes, ffatype_ids=self.ffatype_ids,masses=struct.get_masses()*amu) # get masses contains standard masses in atomic mass units
+        if system.bonds is None:
+            system.detect_bonds()
         return system
 
     def get_yaff_ff(self, system=None):
