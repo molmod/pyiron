@@ -181,6 +181,39 @@ class Gaussian(GenericDFTJob):
     def calc_md(self, temperature=None,  n_ionic_steps=1000, time_step=None, n_print=100):
         raise NotImplementedError("calc_md() not implemented in Gaussian.")
 
+    def calc_scan(self,nsteps,stepsize,ic):
+        '''
+            Function to setup the hamiltonian to perform a relaxed scan job
+            Starting from the initial value of the IC, stepsize is added nstep times
+            to construct a grid for the relaxed scan
+
+            **Arguments**
+
+                nsteps (int)
+                            number of steps
+                stepsize (float)
+                            size of step which is performed nstep times
+                ic (tuple)
+                            see https://gaussian.com/gic/ for a definition of the structural parameters
+                            defined as (kind, [i, j, ...]), where kind equals ('Bond', 'B', 'Dihedral', 'D', ...)
+                            and [i,j,...] is the corresponding list of indices, starting to count from 0
+
+        '''
+        settings = {'geom':['addgic'], 'nosymm':[]}
+        suffix = "Scan(Stepsize={},NStep={}) = {}({})".format(float(stepsize),int(nsteps),ic[0],",".join([str(i+1) for i in ic[1]])) # add 1 since gic starts counting from 1
+
+        self.input['jobtype'] = 'opt'
+
+        if not isinstance(self.input['settings'],dict):
+            self.input['settings'] = settings
+        else:
+            self.input['settings'].update(settings)
+
+        if self.input['suffix'] is not None:
+            self.input['suffix'] += '\n' + suffix
+        else:
+            self.input['suffix'] = suffix
+
 
     def print_MO(self):
         '''
@@ -685,6 +718,15 @@ def fchk2dict(fchk):
             opt_energies = fchk.fields.get('IRC point       1 Results for each geome')[::2]
             opt_gradients = np.reshape(fchk.fields.get('IRC point       1 Gradient at each geome'),(-1, len(fchkdict['structure/numbers']), 3))
             irc_path = fchk.fields.get('IRC point       1 Results for each geome')[1::2]
+        else:
+            # This happens e.g. when an optimization job is performed on a single atom
+            # Just get total energy and initial coords as in sp job
+            fchkdict['structure/positions']   = fchk.fields.get('Current cartesian coordinates').reshape([1,-1, 3])/angstrom
+            fchkdict['generic/positions']     = fchk.fields.get('Current cartesian coordinates').reshape([1,-1, 3])/angstrom
+            fchkdict['generic/energy_tot']    = fchk.fields.get('Total Energy')/electronvolt
+
+            warnings.warn('You performed tried to optimize the nuclear coordinates of a single atom, which is nonsensical. The output is interpreted as a single point job.')
+            return fchkdict
 
         if len(opt_coords.shape) == 3:
             fchkdict['structure/positions']   = opt_coords[-1]/angstrom
