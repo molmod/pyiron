@@ -887,18 +887,21 @@ def read_thermochemistry(output_file,output_dict):
 
         found = False
         while not found:
-            line = next(it)
-            if 'Sum of electronic and thermal Free Energies' in line:
-                zp_energy,th_corr_energy,th_corr_enthalpy,th_corr_gibbs_fe,sum_el_zp_e,sum_el_th_energy,sum_el_th_enthalpy,sum_el_th_fe = get_thermochemistry_array(line,it)
-                output_dict['structure/thermochemistry/zero_point_energy'] = zp_energy
-                output_dict['structure/thermochemistry/thermal_correction_energy'] = th_corr_energy
-                output_dict['structure/thermochemistry/thermal_correction_enthalpy'] = th_corr_enthalpy
-                output_dict['structure/thermochemistry/thermal_correction_gibbs_free_energy'] = th_corr_gibbs_fe
-                output_dict['structure/thermochemistry/sum_electronic_zero_point_energy'] = sum_el_zp_e
-                output_dict['structure/thermochemistry/sum_electronic_thermal_energy'] = sum_el_th_energy
-                output_dict['structure/thermochemistry/sum_electronic_thermal_enthalpy'] = sum_el_th_enthalpy
-                output_dict['structure/thermochemistry/sum_electronic_thermal_free_energy'] = sum_el_th_fe
-                found = True
+            try:
+                line = next(it)
+                if 'Sum of electronic and thermal Free Energies' in line:
+                    zp_energy,th_corr_energy,th_corr_enthalpy,th_corr_gibbs_fe,sum_el_zp_e,sum_el_th_energy,sum_el_th_enthalpy,sum_el_th_fe = get_thermochemistry_array(line,it)
+                    output_dict['structure/thermochemistry/zero_point_energy'] = zp_energy
+                    output_dict['structure/thermochemistry/thermal_correction_energy'] = th_corr_energy
+                    output_dict['structure/thermochemistry/thermal_correction_enthalpy'] = th_corr_enthalpy
+                    output_dict['structure/thermochemistry/thermal_correction_gibbs_free_energy'] = th_corr_gibbs_fe
+                    output_dict['structure/thermochemistry/sum_electronic_zero_point_energy'] = sum_el_zp_e
+                    output_dict['structure/thermochemistry/sum_electronic_thermal_energy'] = sum_el_th_energy
+                    output_dict['structure/thermochemistry/sum_electronic_thermal_enthalpy'] = sum_el_th_enthalpy
+                    output_dict['structure/thermochemistry/sum_electronic_thermal_free_energy'] = sum_el_th_fe
+                    found = True
+            except StopIteration:
+                break
 
 def read_EmpiricalDispersion(output_file,output_dict):
     # Get dispersion term from log file if it is there

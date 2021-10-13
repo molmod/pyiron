@@ -19,7 +19,7 @@ class NMA(tamkin.NMA):
     which calculates the gradient and the hessian using TAMkin based on a job object.
     With the NMA object you can animate a certain mode and plot the IR spectrum.
     """
-    def __init__(self,job, atomic_units=False):
+    def __init__(self, job, atomic_units=False):
         self.job = job
         if job['output/generic/energy_tot'] is None:
             if job['output/generic/energy_pot'] is None:
