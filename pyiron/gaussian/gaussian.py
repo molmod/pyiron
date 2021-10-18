@@ -585,7 +585,7 @@ def write_input(input_dict,working_directory='.'):
             raise ValueError('The Counterpoise setting requires a valid bsse_idx array')
         # Check bsse idx (should start from 1 for Gaussian)
         input_dict['bsse_idx'] = [k - min(input_dict['bsse_idx']) + 1 for k in input_dict['bsse_idx']]
-        # Check if it only contains conseqcutive numbers (sum of set should be n*(n+1)/2)
+        # Check if it only contains consecutive numbers (sum of set should be n*(n+1)/2)
         assert sum(set(input_dict['bsse_idx'])) == (max(input_dict['bsse_idx'])*(max(input_dict['bsse_idx']) + 1))/2
 
     if 'empiricaldispersion' in settings_keys:
@@ -602,7 +602,7 @@ def write_input(input_dict,working_directory='.'):
     for key,valuelst in settings.items():
         if not isinstance(valuelst, list):
             valuelst = [valuelst]
-        option = key + "({})".format(",".join(valuelst))*(len(valuelst)>0) + ' '
+        option = key + "({})".format(",".join([str(v) for v in valuelst]))*(len(valuelst)>0) + ' '
         settings_string += option
 
     # Spin-orbit check
