@@ -66,6 +66,7 @@ def collect_output(fn_pars, fn_sys):
     system = System.from_file(fn_sys)
     output_dict['system/numbers'] = system.numbers
     output_dict['system/pos'] = system.pos/angstrom
+    output_dict['system/charges'] = system.charges
     if system.cell is not None:
         output_dict['system/rvecs'] = system.cell.rvecs/angstrom
     output_dict['system/bonds'] = system.bonds

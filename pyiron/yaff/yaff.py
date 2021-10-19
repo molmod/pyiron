@@ -380,6 +380,7 @@ def hdf2dict(h5):
     hdict = {}
     hdict['structure/numbers'] = h5['system/numbers'][:]
     hdict['structure/masses'] = h5['system/masses'][:]
+    hdict['structure/charges'] = h5['system/charges'][:]
     hdict['structure/ffatypes'] = h5['system/ffatypes'][:]
     hdict['structure/ffatype_ids'] = h5['system/ffatype_ids'][:]
 

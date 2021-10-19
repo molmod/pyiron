@@ -46,6 +46,7 @@ class Horton(GenericJob):
                       'ffatypes': self.input['ffatypes'],
                       'ei-scales': self.input['ei-scales'],
                       'bci-constraints': self.input['bci-constraints'],
+                      'verbose': self.input['verbose'],
                       'scheme': self.scheme,
                       'numbers': list(set(self.structure.numbers)),
                       'lot': self.lot,
@@ -100,12 +101,24 @@ class Horton(GenericJob):
 
 
     def log(self):
+        logtext = ""
         with open(os.path.join(self.working_directory, 'horton.log')) as f:
-            print(f.read())
+            logtext+= f.read()
+
+        logtext+='\n\n'
+
+        with open(os.path.join(self.working_directory, 'quickff.log')) as f:
+            logtext+= f.read()
+
+        print(logtext)
 
 
 def write_input(input_dict,working_directory='.'):
     options=[]
+
+    if input_dict['verbose'] is not None and input_dict['verbose']:
+        options+= ['--verbose']
+
     if input_dict['ffatypes'] is not None:
         options+= ['--ffatypes {}'.format(input_dict['ffatypes'])]
 
@@ -167,7 +180,7 @@ def write_input(input_dict,working_directory='.'):
                 if not line.startswith('#') and (line.startswith('ml') or line.startswith('module')):
                     g.write(line)
             g.write('\n')
-        g.write("python qff_input_ei.py\n")
+        g.write("python qff_input_ei.py > quickff.log\n")
 
         # Change permissions (equal to chmod +x)
         st = os.stat(horton_script)
@@ -197,5 +210,6 @@ gaussian True # Use gaussian smeared charges
 ffatypes high # {None,list_of_atypes,low,medium,high,highest}
 ei-scales 1,1,1 # A comma-seperated list representing the electrostatic neighborscales
 bci-constraints None # A file containing constraints for the charge to bci fit in a master: slave0,slave1,...: sign format
+verbose True # set False if you don't want a log file
 """
         self.load_string(input_str)
