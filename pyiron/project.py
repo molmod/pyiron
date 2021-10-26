@@ -701,12 +701,40 @@ class Project(ProjectCore):
 
     @staticmethod
     def calc_RDF(job,atom_1,atom_2,rcut=20*angstrom,rspacing=0.01*angstrom,nimage=1,start=0,stop=-1,nf=0,save=False,atomic_units=False):
-        """
+        """ Computes RDF for two atoms: atom_1 and atom_2.
 
-        Args:
-            job : The job object used to calculate the RDF, requires a trajectory of cells and positions
-            atom_1, atom_2: atoms for which to construct an RDF
-            other parameters are explained in RDF class
+            **Arguments:**
+                job
+                    job object that contains an MD trajectory of the structure
+
+                atom_1,atom_2
+                    atom numbers between which the RDF is computed
+
+            **Optional arguments:**
+
+                rcut
+                    The cutoff for the RDF analysis. This should be lower than the
+                    spacing between the primitive cell planes, multiplied by (1+2*nimage).
+
+                rspacing
+                    The width of the bins to build up the RDF.
+
+                nimage
+                    number of periodic images taken into account
+
+                start,stop
+                    First and last index of the slice that is taken into account
+
+                nf
+                    The first nf atoms are not taken into account when constructing the RDF
+                    (convenient when studying for instance H2O adsorbed in a framework)
+
+                save
+                    Save the RDF data on disk
+
+                atomic_units
+                    True if pyiron output is in atomic unit
+
         Returns:
             atomistics.md_analysis.rdf.RDF instance
         """

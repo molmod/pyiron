@@ -49,6 +49,8 @@ class RDF(object):
                 atomic_units
                     True if pyiron output is in atomic units
         '''
+        assert isinstance(atom_1,int) and isinstance(atom_2,int)
+
         self.job = job
         structure = self.job.get_structure(-1)
         numbers = structure.get_atomic_numbers()

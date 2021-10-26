@@ -499,8 +499,8 @@ class Yaff(AtomisticGenericJob):
             self.input['jobtype'] = 'opt_cell'
         else:
             self.input['jobtype'] = 'opt'
-        self.input['nsteps']     = max_iter
-        self.input['h5step']     = n_print
+        self.input['nsteps']     = int(max_iter)
+        self.input['h5step']     = int(n_print)
         self.input['gpos_rms']   = gpos_tol
         self.input['dpos_rms']   = dpos_tol
         self.input['grvecs_rms'] = grvecs_tol
@@ -538,9 +538,9 @@ class Yaff(AtomisticGenericJob):
         '''
         self.input['temp'] = temperature
         self.input['press'] = pressure
-        self.input['nsteps'] = nsteps
+        self.input['nsteps'] = int(nsteps)
         self.input['timestep'] = time_step
-        self.input['h5step'] = n_print
+        self.input['h5step'] = int(n_print)
         self.input['timecon_thermo'] = timecon_thermo
         self.input['timecon_baro'] = timecon_baro
 
