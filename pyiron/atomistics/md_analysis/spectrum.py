@@ -88,17 +88,27 @@ class Spectrum(object):
         self.nfft = spectrum.nfft
 
 
-    def plot(self, fn_png=None, do_wavenum=True, xlim=None, verticals=None, thermostat=None, ndof=None):
+    def plot(self, fn_png=None, xlim=None, verticals=None, thermostat=None, ndof=None):
         """
-            verticals: array containing as first entry the timeconstant of the original
-            system, and as following entries the wavenumbers of the original system.
+           **Optional arguments**
+
+           fn_png
+                location to save the resulting figure
+
+           do_wavenum
+                Use [1/cm] as units for frequency
+
+            xlim
+               Provide the xlim for the plot in units of [1/cm]
+
+            verticals
+               Array containing the thermostat timeconstant of the system at the
+               first index (in atomic units), followed by the wavenumbers (in 1/cm)
+               of the system
         """
-        if do_wavenum:
-            xunit = lightspeed/centimeter
-            xlabel = 'Wavenumber [1/cm]'
-        else:
-            xunit = 1/log.time.conversion
-            xlabel = 'Frequency [1/%s]' % log.time.notation
+        xunit = lightspeed/centimeter
+        xlabel = 'Wavenumber [1/cm]'
+
         pt.clf()
         pt.plot(self.freqs/xunit, self.amps)
         if verticals is not None:
@@ -126,10 +136,10 @@ class Spectrum(object):
             pt.savefig(fn_png)
         pt.show()
 
-    def plot_ac(self, fn_png=None):
+    def plot_ac(self, fn_png=None, time_unit=femtosecond, xlabel='Time [a.u.]'):
         pt.clf()
-        pt.plot(self.time/log.time.conversion, self.ac/self.ac[0])
-        pt.xlabel('Time [%s]' % log.time.notation)
+        pt.plot(self.time/time_unit, self.ac/self.ac[0])
+        pt.xlabel(xlabel)
         pt.ylabel('Autocorrelation')
         if fn_png is not None:
             pt.savefig(fn_png)
