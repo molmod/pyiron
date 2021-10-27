@@ -329,7 +329,7 @@ def write_plumed_enhanced(input_dict,working_directory='.'):
     #write plumed.dat file
     with open(posixpath.join(working_directory, 'plumed.dat'), 'w') as f:
         #set units to atomic units
-        f.write('UNITS LENGTH=Bohr ENERGY=kj/mol TIME=atomic \n')
+        f.write('UNITS LENGTH=Bohr ENERGY=kj/mol TIME=fs \n')
         #define ics
         for i, kind in enumerate(enhanced['ickinds']):
             if isinstance(kind, bytes):
@@ -404,7 +404,7 @@ def hdf2dict(h5):
         if 'counter' in h5['trajectory'].keys():
             hdict['generic/steps'] = h5['trajectory/counter'][:]
         if 'time' in h5['trajectory'].keys():
-            hdict['generic/time'] = h5['trajectory/time'][:]
+            hdict['generic/time'] = h5['trajectory/time'][:]/femtosecond
         if 'volume' in h5['trajectory']:
             hdict['generic/volume'] = h5['trajectory/volume'][:]/angstrom**3
         if 'epot' in h5['trajectory'].keys():
@@ -424,6 +424,13 @@ def hdf2dict(h5):
             hdict['generic/pressure'] = h5['trajectory/press'][:]/(1e9*pascal)
         if 'gradient' in h5['trajectory'].keys():
             hdict['generic/forces'] = -h5['trajectory/gradient'][:]/(electronvolt/angstrom)
+        if 'vel' in h5['trajectory'].keys():
+            hdict['generic/velocities'] = h5['trajectory/vel'][:]/(angstrom/femtosecond)
+        if 'dipole' in h5['trajectory'].keys():
+            hdict['generic/dipole'] = h5['trajectory/dipole'][:]/(angstrom) # unit is e*A
+        if 'dipole_vel' in h5['trajectory'].keys():
+            hdict['generic/dipole_velocities'] = h5['trajectory/dipole_vel'][:]/angstrom/(angstrom/femtosecond) # unit is (e*A)*(A/fs)
+
     if 'hessian' in h5['system'].keys():
         hdict['generic/forces'] = -h5['system/gpos'][:]/(electronvolt/angstrom)
         hdict['generic/hessian'] = h5['system/hessian'][:]/(electronvolt/angstrom**2)
@@ -499,8 +506,8 @@ class Yaff(AtomisticGenericJob):
             self.input['jobtype'] = 'opt_cell'
         else:
             self.input['jobtype'] = 'opt'
-        self.input['nsteps']     = int(max_iter)
-        self.input['h5step']     = int(n_print)
+        self.input['nsteps']     = max_iter
+        self.input['h5step']     = n_print
         self.input['gpos_rms']   = gpos_tol
         self.input['dpos_rms']   = dpos_tol
         self.input['grvecs_rms'] = grvecs_tol
@@ -538,9 +545,9 @@ class Yaff(AtomisticGenericJob):
         '''
         self.input['temp'] = temperature
         self.input['press'] = pressure
-        self.input['nsteps'] = int(nsteps)
+        self.input['nsteps'] = nsteps
         self.input['timestep'] = time_step
-        self.input['h5step'] = int(n_print)
+        self.input['h5step'] = n_print
         self.input['timecon_thermo'] = timecon_thermo
         self.input['timecon_baro'] = timecon_baro
 
@@ -982,6 +989,7 @@ class Yaff(AtomisticGenericJob):
 
     # Plot functions are deprecated while yaff is no longer in atomic units!
     def plot(self, ykey, xkey='generic/steps', xunit='au', yunit='au', ref=None, linestyle='-', rolling_average=False):
+        warnings.warn('Deprecated! The output units are not necessarily atomic units, such that we can not just divide by the unit.')
         xs = self['output/%s' %xkey]/parse_unit(xunit)
         ys = self['output/%s' %ykey]/parse_unit(yunit)
         if rolling_average:
@@ -1004,6 +1012,7 @@ class Yaff(AtomisticGenericJob):
 
     # Plot functions are deprecated while yaff is no longer in atomic units!
     def plot_multi(self, ykeys, xkey='generic/steps', xunit='au', yunit='au', ref=None, linestyle='-', rolling_average=False):
+        warnings.warn('Deprecated! The output units are not necessarily atomic units, such that we can not just divide by the unit.')
         # Assume that all ykeys have the same length than the xkey
         xs  = self['output/%s' %xkey]/parse_unit(xunit)
         yss = np.array([self['output/%s' %ykey]/parse_unit(yunit) for ykey in ykeys])

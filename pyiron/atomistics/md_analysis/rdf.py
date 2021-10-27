@@ -14,15 +14,17 @@ class RDF(object):
     This is a generic module to construct a radial distribution function based on a job object.
     With the RDF object you can plot the rdf and the cdf, and calculate the coordination numbers.
     """
-    def __init__(self,job,atom_1,atom_2,rcut=20*angstrom,rspacing=0.01*angstrom,nimage=1,start=0,stop=-1,nf=0,save=False,atomic_units=False,suffix=None):
-        ''' Computes RDF for two atoms: atom_1 and atom_2.
+    def __init__(self,job,select_0,select_1,rcut=20*angstrom,rspacing=0.01*angstrom,nimage=1,start=0,stop=-1,nf=0,save=False,atomic_units=False,suffix=None):
+        ''' Computes RDF between two selections of atoms.
 
             **Arguments:**
                 job
                     job object that contains an MD trajectory of the structure
 
-                atom_1,atom_2
-                    atom numbers between which the RDF is computed
+                select_0,select_1
+                    (int):  atom numbers between which the RDF is computed
+                    (str):  atom symbols between which the RDF is computed
+                    (list): atom indices between which the RDF is computed
 
             **Optional arguments:**
 
@@ -49,20 +51,31 @@ class RDF(object):
                 atomic_units
                     True if pyiron output is in atomic units
         '''
-        assert isinstance(atom_1,int) and isinstance(atom_2,int)
 
         self.job = job
         structure = self.job.get_structure(-1)
         numbers = structure.get_atomic_numbers()
 
-        select0 = []
-        select1 = []
-        for i, num in enumerate(numbers):
-            if num == atom_1 and i >= nf:
-                select0.append(i)
-            elif num == atom_2 and i >= nf:
-                select1.append(i)
-        if atom_1 == atom_2:
+        def _convert_to_selection(select):
+            if isinstance(select,list):
+                return select
+            elif isinstance(select,int):
+                select_list = []
+                for i, num in enumerate(numbers):
+                    if num == select and i >= nf:
+                        select_list.append(i)
+                return select_list
+            elif isinstance(select,str):
+                from molmod.periodic import periodic as pt
+                select_int = pt[select].number
+                return _convert_to_selection(select_int)
+            else:
+                raise ValueError('The provided atom selection was not an integer, string or list of indices!')
+
+        select0 = _convert_to_selection(select_0)
+        select1 = _convert_to_selection(select_1)
+
+        if select0 == select1:
             select1 = None
 
         # Compute RDF

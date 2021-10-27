@@ -12,7 +12,7 @@ from molmod.units import *
 from molmod.constants import *
 
 
-def plot_temp_dist(job,temp=None, ndof=None):
+def plot_temp_dist(job,temp=None,ndof=None):
     """Plots the distribution of the weighted atomic velocities
 
        **Arguments:**

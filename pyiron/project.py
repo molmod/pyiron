@@ -25,6 +25,7 @@ from pyiron.atomistics.structure.generator import create_surface, create_ase_bul
 from pyiron.atomistics.master.parallel import pipe
 from pyiron.atomistics.nma.nma import NMA
 from pyiron.atomistics.md_analysis.rdf import RDF
+from pyiron.atomistics.md_analysis.spectrum import Spectrum
 
 from molmod.units import *
 
@@ -689,7 +690,7 @@ class Project(ProjectCore):
         return periodic_table.element(new_element_name)
 
     @staticmethod
-    def apply_nma(job):
+    def apply_nma(job): # perhaps we should rename this to calc_NMA
         """
 
         Args:
@@ -700,15 +701,17 @@ class Project(ProjectCore):
         return NMA(job)
 
     @staticmethod
-    def calc_RDF(job,atom_1,atom_2,rcut=20*angstrom,rspacing=0.01*angstrom,nimage=1,start=0,stop=-1,nf=0,save=False,atomic_units=False):
-        """ Computes RDF for two atoms: atom_1 and atom_2.
+    def calc_RDF(job,select_0,select_1,rcut=20*angstrom,rspacing=0.01*angstrom,nimage=1,start=0,stop=-1,nf=0,save=False,atomic_units=False):
+        """ Computes RDF between two selections of atoms.
 
             **Arguments:**
                 job
                     job object that contains an MD trajectory of the structure
 
-                atom_1,atom_2
-                    atom numbers between which the RDF is computed
+                select_0,select_1
+                    (int):  atom numbers between which the RDF is computed
+                    (str):  atom symbols between which the RDF is computed
+                    (list): atom indices between which the RDF is computed
 
             **Optional arguments:**
 
@@ -733,12 +736,80 @@ class Project(ProjectCore):
                     Save the RDF data on disk
 
                 atomic_units
-                    True if pyiron output is in atomic unit
+                    True if pyiron output is in atomic units
 
         Returns:
             atomistics.md_analysis.rdf.RDF instance
         """
-        return RDF(job,atom_1,atom_2,rcut,rspacing,nimage,start,stop,nf,save,atomic_units)
+        return RDF(job,select_0,select_1,rcut,rspacing,nimage,start,stop,nf,save,atomic_units)
+
+    @staticmethod
+    def calc_spectrum(job, start=0, end=-1, step=1, bsize=4096, select=None, path='output/generic/velocity', weights=None, unit=angstrom/femtosecond):
+        """
+           **Arguments**
+
+           job
+               job object that contains an MD trajectory of the structure
+
+           **Optional arguments:**
+
+           start
+                The first sample to be considered for analysis. This may be
+                negative to indicate that the analysis should start from the
+                -start last samples.
+
+           end
+                The last sample to be considered for analysis. This may be
+                negative to indicate that the last -end sample should not be
+                considered.
+
+           step
+                The spacing between the samples used for the analysis
+
+           bsize
+                The size of the blocks used for individual FFT calls.
+
+           select
+                A list of atom indexes that are considered for the computation
+                of the spectrum. If not given, all atoms are used.
+
+           path
+                The path of the dataset that contains the time dependent data in
+                the HDF5 file. The first axis of the array must be the time
+                axis. The spectra are summed over the other axes.
+
+           weights
+                If not given, the spectrum is just a simple sum of contributions
+                from different time-dependent functions. If given, a linear
+                combination is made based on these weights.
+
+           unit
+                The unit of the path data
+
+           The max_sample argument from get_slice is not used because the choice
+           step value is an important parameter: it is best to choose step*bsize
+           such that it coincides with a part of the trajectory in which the
+           velocities (or other data) are continuous.
+
+           The block size should be set such that it corresponds to a decent
+           resolution on the frequency axis, i.e. 33356 fs of MD data
+           corresponds to a resolution of about 1 cm^-1. The step size should be
+           set such that the highest frequency is above the highest relevant
+           frequency in the spectrum, e.g. a step of 10 fs corresponds to a
+           frequency maximum of 3336 cm^-1. The total number of FFT's, i.e.
+           length of the simulation divided by the block size multiplied by the
+           number of time-dependent functions in the data, determines the noise
+           reduction on the (the amplitude of) spectrum. If there is sufficient
+           data to perform 10K FFT's, one should get a reasonably smooth
+           spectrum.
+
+           Depending on the FFT implementation in numpy, it may be interesting
+           to tune the bsize argument. A power of 2 is typically a good choice.
+
+        Returns:
+            atomistics.md_analysis.spectrum.Spectrum instance
+        """
+        return Spectrum(job,start,end,step,bsize,select,path,weights,unit)
 
     # Graphical user interfaces
     def gui(self):
