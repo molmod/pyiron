@@ -239,7 +239,7 @@ class US(AtomisticParallelMaster):
         '''
 
         # Ref job corresponds to template
-        assert self.ref_job.structure is not None
+        assert self._ref_job.structure is not None
         self.ref_f = f
 
 
@@ -252,7 +252,7 @@ class US(AtomisticParallelMaster):
         pt.figure()
         for job_id in self.child_ids:
             job = self.project_hdf5.inspect(job_id)
-            pt.plot(job['output/enhanced/cv'])
+            pt.plot(job['output/enhanced/trajectory/cv'])
         pt.show()
 
 
