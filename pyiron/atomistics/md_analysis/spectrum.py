@@ -12,7 +12,7 @@ from molmod.constants import *
 
 
 class Spectrum(object):
-    def __init__(self, job, start=0, end=-1, step=1, bsize=4096, select=None, path='output/generic/velocity', weights=None, unit=angstrom/femtosecond):
+    def __init__(self, job, start=0, end=-1, step=1, bsize=4096, select=None, path='output/generic/velocities', weights=None, unit=angstrom/femtosecond):
         """
            **Arguments**
 

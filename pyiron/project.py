@@ -744,7 +744,7 @@ class Project(ProjectCore):
         return RDF(job,select_0,select_1,rcut,rspacing,nimage,start,stop,nf,save,atomic_units)
 
     @staticmethod
-    def calc_spectrum(job, start=0, end=-1, step=1, bsize=4096, select=None, path='output/generic/velocity', weights=None, unit=angstrom/femtosecond):
+    def calc_spectrum(job, start=0, end=-1, step=1, bsize=4096, select=None, path='output/generic/velocities', weights=None, unit=angstrom/femtosecond):
         """
            **Arguments**
 
