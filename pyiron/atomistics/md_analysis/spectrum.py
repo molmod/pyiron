@@ -95,9 +95,6 @@ class Spectrum(object):
            fn_png
                 location to save the resulting figure
 
-           do_wavenum
-                Use [1/cm] as units for frequency
-
             xlim
                Provide the xlim for the plot in units of [1/cm]
 
@@ -126,7 +123,7 @@ class Spectrum(object):
             pt.axvline(thermo_freq+2.0*thermo_freq/np.sqrt(ndof), color='r', ls='--')
 
         if xlim is not None:
-            pt.xlim(xlim[0]/xunit, xlim[1]/xunit)
+            pt.xlim(xlim[0], xlim[1])
         else:
             pt.xlim(0, self.freqs[-1]/xunit)
 
