@@ -903,42 +903,6 @@ def read_thermochemistry(output_file,output_dict):
             except StopIteration:
                 break
 
-def read_EmpiricalDispersion(output_file,output_dict):
-    # Get dispersion term from log file if it is there
-    # dispersion term is not retrieved from gaussian output in fchk
-
-    # the log file has the same path and name as the output file aside from the file extension
-    log_file = output_file[:output_file.rfind('.')] + '.log'
-    route = ''
-
-    disp = None
-    with open(log_file,'r') as f:
-        while True:
-            line = f.readline()
-            if line.startswith('#'):
-                while not (line.startswith('-')):
-                    route += line
-                    line = f.readline().lstrip(' ')
-            route = route.replace("\n","").lower()
-            break
-
-    if 'empiricaldispersion' in route:
-        idx = line.find('empiricaldispersion')
-        if 'gd3' in line[idx:]:
-            search_term = 'Grimme-D3 Dispersion energy='
-        else:
-            raise NotImplementedError('Could not read the kind of EmpiricalDispersion being used.')
-    else:
-         return
-
-    it = _reverse_readline(log_file)
-    while True:
-        line = next(it)
-        if search_term in line:
-            disp = float(line[38:-9])/electronvolt # could be changed when new search terms are implemented
-            break
-
-    output_dict['generic/energy_tot'] += disp
 
 
 def collect_output(output_file):
@@ -953,9 +917,6 @@ def collect_output(output_file):
 
     # Read BSSE output if it is present
     read_thermochemistry(output_file,output_dict)
-
-    # Correct energy if empirical dispersion contribution is present
-    read_EmpiricalDispersion(output_file,output_dict)
 
     return output_dict
 
