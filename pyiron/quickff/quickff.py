@@ -18,6 +18,20 @@ from molmod.periodic import periodic as pt
 
 import os, posixpath, numpy as np, h5py, matplotlib.pyplot as pp
 
+s = Settings()
+
+def get_mm3_path():
+    for resource_path in s.resource_paths:
+        p = os.path.join(resource_path, "quickff", "bin", "mm3.prm")
+        if os.path.exists(p):
+            return p
+
+def get_uff_path():
+    for resource_path in s.resource_paths:
+        p = os.path.join(resource_path, "quickff", "bin", "uff.prm")
+        if os.path.exists(p):
+            return p
+
 
 def write_chk(input_dict, working_directory='.'):
     # collect data and initialize Yaff system
@@ -189,6 +203,67 @@ class QuickFF(AtomisticGenericJob):
 
         self.ffatypes = system.ffatypes.copy()
         self.ffatype_ids = system.ffatype_ids.copy()
+
+    def derive_vdw_mm3(self,fn_vdw='pars_vdw.txt'):
+        """
+            Derive the VDW parameters from the MM3 force field using the atom types of the current job
+        """
+        try:
+            from openbabel import openbabel
+            import pyiron.quickff.mm3 as mm3
+        except ImportError:
+            raise ImportError('Could not load the openbabel module, make sure the openbabel module is active!')
+
+        # Create xyz file of structure
+        fn_xyz = os.path.join(self.working_directory,'structure.xyz')
+        fn_txyz = os.path.join(self.working_directory,'structure.txyz')
+        self.structure.write(fn_xyz)
+
+        # Convert xyz to Tinker xyz with types
+        convertor = openbabel.OBConversion()
+        convertor.SetInAndOutFormats('xyz','txyz')
+        convertor.AddOption('3',convertor.OUTOPTIONS) # set MM3 instead of MM2, option -3 to output options
+
+        structure = openbabel.OBMol()
+        convertor.ReadFile(structure, fn_xyz)
+        convertor.WriteFile(structure, fn_txyz)
+
+        # Create MM3 pars file
+        fn_sys = os.path.join(self.working_directory, self.input['fn_sys'])
+        fn_out = os.path.join(self.working_directory, fn_vdw)
+        periodic_structure = self.structure.cell is not None and self.structure.cell.volume > 0
+        mm3_atomtypes = mm3.get_mm3_indices(fn_sys, fn_txyz, periodic_structure)
+        mm3_ff = mm3.get_mm3_ff(get_mm3_path())
+        mm3.write_mm3_pars(mm3_ff, mm3_atomtypes, fn_out)
+
+    def derive_uff(self,ljcross=False,full_ff=False,fn_vdw='pars_vdw.txt',fn_cov='pars_cov_lj.txt'):
+        """
+            Derive the UFF force field parameters using the atom types of the current job
+
+            ***Arguments***
+
+            ljcross
+                True: explicitly calculates all cross terms separately for the vdw part
+
+            full_ff
+                False: only calculates the VDW part
+                True: derives both the covalent and VDW UFF parameters for the provided atom types
+                      in this case the electrostatic part should still be added from Horton
+
+        """
+
+        import pyiron.quickff.uff as uff
+        system = self.get_yaff_system()
+
+        fn_out_vdw = os.path.join(self.working_directory, fn_vdw)
+        fn_out_cov = os.path.join(self.working_directory, fn_cov)
+
+        uff = uff.UFFMachine(system, get_uff_path())
+        uff.build(ljcross=ljcross)
+        uff.pars_lj.to_file(fn_out_vdw)
+        if full_ff:
+            uff.pars_cov.to_file(fn_out_cov)
+            print('Dont forget to add the electrostatic part to these ff parts!')
 
     def set_ei(self, fn):
         self.input['ei'] = fn.split('/')[-1]
