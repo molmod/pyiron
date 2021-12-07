@@ -214,6 +214,11 @@ class QuickFF(AtomisticGenericJob):
         except ImportError:
             raise ImportError('Could not load the openbabel module, make sure the openbabel module is active!')
 
+        # Check if the structure is periodic
+        periodic_structure = self.structure.cell is not None and self.structure.cell.volume > 0
+        if periodic_structure:
+            raise ValueError('The current implementation of openbabel does not parse the bonds correctly for periodic structures, such that the MM3 atomtypes can not be recognized.')
+
         # Create xyz file of structure
         fn_xyz = os.path.join(self.working_directory,'structure.xyz')
         fn_txyz = os.path.join(self.working_directory,'structure.txyz')
@@ -231,7 +236,7 @@ class QuickFF(AtomisticGenericJob):
         # Create MM3 pars file
         fn_sys = os.path.join(self.working_directory, self.input['fn_sys'])
         fn_out = os.path.join(self.working_directory, fn_vdw)
-        periodic_structure = self.structure.cell is not None and self.structure.cell.volume > 0
+
         mm3_atomtypes = mm3.get_mm3_indices(fn_sys, fn_txyz, periodic_structure)
         mm3_ff = mm3.get_mm3_ff(get_mm3_path())
         mm3.write_mm3_pars(mm3_ff, mm3_atomtypes, fn_out)
