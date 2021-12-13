@@ -217,6 +217,11 @@ class QuickFF(AtomisticGenericJob):
         # Create working directory to store files in
         self._create_working_directory()
 
+        fn_sys = self.input['fn_sys']
+        if not self.status.finished:
+            fn_sys = 'input.chk'
+            self.write_input()
+
         # Check if the structure is periodic
         periodic_structure = self.structure.cell is not None and self.structure.cell.volume > 0
         if periodic_structure:
@@ -237,7 +242,7 @@ class QuickFF(AtomisticGenericJob):
         convertor.WriteFile(structure, fn_txyz)
 
         # Create MM3 pars file
-        fn_sys = os.path.join(self.working_directory, self.input['fn_sys'])
+        fn_sys = os.path.join(self.working_directory, fn_sys)
         fn_out = os.path.join(self.working_directory, fn_vdw)
 
         mm3_atomtypes = mm3.get_mm3_indices(fn_sys, fn_txyz, periodic_structure)
@@ -262,8 +267,13 @@ class QuickFF(AtomisticGenericJob):
         # Create working directory to store files in
         self._create_working_directory()
 
+        fn_sys = self.input['fn_sys']
+        if not self.status.finished:
+            fn_sys = 'input.chk'
+            self.write_input()
+
         import pyiron.quickff.uff as uff
-        system = self.get_yaff_system()
+        system = System.from_file(os.path.join(self.working_directory,fn_sys))
 
         fn_out_vdw = os.path.join(self.working_directory, fn_vdw)
         fn_out_cov = os.path.join(self.working_directory, fn_cov)
