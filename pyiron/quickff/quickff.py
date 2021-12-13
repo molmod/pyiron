@@ -214,6 +214,9 @@ class QuickFF(AtomisticGenericJob):
         except ImportError:
             raise ImportError('Could not load the openbabel module, make sure the openbabel module is active!')
 
+        # Create working directory to store files in
+        self._create_working_directory()
+
         # Check if the structure is periodic
         periodic_structure = self.structure.cell is not None and self.structure.cell.volume > 0
         if periodic_structure:
@@ -256,6 +259,8 @@ class QuickFF(AtomisticGenericJob):
                       in this case the electrostatic part should still be added from Horton
 
         """
+        # Create working directory to store files in
+        self._create_working_directory()
 
         import pyiron.quickff.uff as uff
         system = self.get_yaff_system()
