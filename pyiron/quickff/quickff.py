@@ -164,14 +164,17 @@ class QuickFF(AtomisticGenericJob):
         self.fn_vdw = None
 
     def read_abinitio(self, fn):
-        numbers, coords, energy, grad, hess, masses, rvecs, pbc = read_abinitio(fn)
+        numbers, coords, energy, grad, hess, masses, rvecs, pbc = read_abinitio(fn,do_hess=False)
         coords /= angstrom
         if rvecs is not None:
             rvecs /= angstrom
         self.structure = Atoms(numbers=numbers, positions=coords, cell=rvecs)
-        self.aiener = energy
-        self.aigrad = grad
-        self.aihess = hess
+        self.fn_ai = fn
+
+        # We will read these properties later, we do not want to store them in the h5 file
+        #self.aiener = energy
+        #self.aigrad = grad
+        #self.aihess = hess
 
     def detect_ffatypes(self, ffatypes=None, ffatype_rules=None, ffatype_level=None):
         '''
@@ -216,6 +219,13 @@ class QuickFF(AtomisticGenericJob):
 
         # Create working directory to store files in
         self._create_working_directory()
+
+        # Simple sanity checks
+        if self.ffatypes is None:
+            raise ValueError('You did not yet assign the atom types. Try placing detect_ffatypes() before this command.')
+
+        if self.structure is None:
+            raise ValueError('You did not yet assign the structure. Try placing read_abintio() before this command.')
 
         fn_sys = self.input['fn_sys']
         if not self.status.finished:
@@ -267,6 +277,13 @@ class QuickFF(AtomisticGenericJob):
         # Create working directory to store files in
         self._create_working_directory()
 
+        # Simple sanity checks
+        if self.ffatypes is None:
+            raise ValueError('You did not yet assign the atom types. Try placing detect_ffatypes() before this command.')
+
+        if self.structure is None:
+            raise ValueError('You did not yet assign the structure. Try placing read_abintio() before this command.')
+
         fn_sys = self.input['fn_sys']
         if not self.status.finished:
             fn_sys = 'input.chk'
@@ -301,10 +318,18 @@ class QuickFF(AtomisticGenericJob):
             'ffatypes_man': self.ffatypes,
             'ffatype_ids_man': self.ffatype_ids,
             'pos': self.structure.positions,
-            'aiener': self.aiener,
-            'aigrad': self.aigrad,
-            'aihess': self.aihess,
+
+            #'aiener': self.aiener,
+            #'aigrad': self.aigrad,
+            #'aihess': self.aihess,
         }
+
+        # Assign ai input data
+        _, _, energy, grad, hess, _, _, _ = read_abinitio(self.fn_ai,do_hess=True)
+        input_dict['aiener'] = energy
+        input_dict['aigrad'] = grad
+        input_dict['aihess'] = hess
+
         for key in self.input._dataset["Parameter"]:
             input_dict[key] = self.input[key]
         input_dict['cell'] = None
@@ -335,12 +360,25 @@ class QuickFF(AtomisticGenericJob):
         with self.project_hdf5.open("input") as hdf5_input:
             self.structure.to_hdf(hdf5_input)
             self.input.to_hdf(hdf5_input)
+            # Also save other attributes
+            hdf5_input['generic/ffatypes'] = np.asarray(self.ffatypes,'S22')
+            hdf5_input['generic/ffatype_ids'] = self.ffatype_ids
+            hdf5_input['generic/fn_ai'] = self.fn_ai
+            hdf5_input['generic/fn_ei'] = self.fn_ei
+            hdf5_input['generic/fn_vdw'] = self.fn_vdw
+
 
     def from_hdf(self, hdf=None, group_name=None):
         super(QuickFF, self).from_hdf(hdf=hdf, group_name=group_name)
         with self.project_hdf5.open("input") as hdf5_input:
             self.input.from_hdf(hdf5_input)
             self.structure = Atoms().from_hdf(hdf5_input)
+            self.ffatypes = np.char.decode(hdf5_input['generic/ffatypes']) # decode byte string literals
+            self.ffatype_ids = hdf5_input['generic/ffatype_ids']
+            self.fn_ai = hdf5_input['generic/fn_ai']
+            self.fn_ei = hdf5_input['generic/fn_ei']
+            self.fn_vdw = hdf5_input['generic/fn_vdw']
+
 
     def get_structure(self, iteration_step=-1, wrap_atoms=True):
         """
