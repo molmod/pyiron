@@ -802,8 +802,8 @@ class Yaff(AtomisticGenericJob):
             self.bonds = system.bonds
             print('Warning: no bonds could be read and were automatically detected.')
 
-        if not sum([ffatypes is None, ffatype_rules is None, ffatype_level is None]) == 2:
-            raise IOError('Exactly one of ffatypes, ffatype_rules and ffatype_level should be defined')
+        if ffatypes is not None ^ ffatype_level is not None ^ ffatype_rules is not None:
+            raise ValueError('Only one of ffatypes, ffatype_rules, and ffatype_level can be defined!')
 
         if ffatypes is not None:
             system.ffatypes = ffatypes
