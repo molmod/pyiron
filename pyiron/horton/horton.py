@@ -53,6 +53,23 @@ class Horton(GenericJob):
                       'basis_set': self.basis_set,
                       }
         write_input(input_dict=input_dict, working_directory=self.working_directory)
+        
+    def detect_ffatypes(self, ffatypes=None, ffatype_level=None):
+        '''
+            Define atom types by explicitely giving them through the
+            ffatypes keyword, or by specifying the ffatype_level employing
+            the built-in routine in QuickFF.
+            Loading the atom types from an input file is not supported in pyiron.
+        '''
+        if ffatypes is not None ^ ffatype_level is not None:
+            raise ValueError('Only one of ffatypes and ffatype_level can be defined!')
+        
+        if ffatype_level is not None:
+            self.input['ffatypes'] = ffatype_level
+        
+        if ffatypes is not None:
+            assert isinstance(ffatypes,list)
+            self.input['ffatypes'] = ",".join(ffatypes)
 
     def calculate_AIM_charges(self,job,scheme='mbis'):
         try:
