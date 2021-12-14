@@ -89,8 +89,6 @@ def collect_output(fn_pars, fn_sys):
     return output_dict
 
 
-
-
 class QuickFFInput(GenericParameters):
     def __init__(self, input_file_name=None):
         super(QuickFFInput, self).__init__(input_file_name=input_file_name,table_name="input_inp",comment_char="#")
@@ -157,9 +155,10 @@ class QuickFF(AtomisticGenericJob):
         self.input = QuickFFInput()
         self.ffatypes = None
         self.ffatype_ids = None
-        self.aiener = None
-        self.aigrad = None
-        self.aihess = None
+        #self.aiener = None
+        #self.aigrad = None
+        #self.aihess = None
+        self.fn_ai = None
         self.fn_ei = None
         self.fn_vdw = None
 
