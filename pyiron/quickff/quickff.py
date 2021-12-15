@@ -191,7 +191,7 @@ class QuickFF(AtomisticGenericJob):
         system.detect_bonds()
 
         def ternary_xor(a,b,c):
-            return a if not (b | c) else (b ^ c)
+            return not (b | c) if a else (b ^ c)
 
         if not ternary_xor(ffatypes is not None, ffatype_level is not None, ffatype_rules is not None):
             raise ValueError('Only one of ffatypes, ffatype_rules, and ffatype_level can be defined!')
