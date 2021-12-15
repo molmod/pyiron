@@ -189,12 +189,11 @@ class QuickFF(AtomisticGenericJob):
         else:
             system = System(numbers, self.structure.positions.copy()*angstrom)
         system.detect_bonds()
-        
+
         if ffatypes is not None ^ ffatype_level is not None ^ ffatype_rules is not None:
             raise ValueError('Only one of ffatypes, ffatype_rules, and ffatype_level can be defined!')
 
         if ffatypes is not None:
-            assert ffatype_rules is None, 'ffatypes and ffatype_rules cannot be defined both'
             system.ffatypes = ffatypes
             system.ffatype_ids = None
             system._init_derived_ffatypes()
