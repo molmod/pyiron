@@ -190,7 +190,10 @@ class QuickFF(AtomisticGenericJob):
             system = System(numbers, self.structure.positions.copy()*angstrom)
         system.detect_bonds()
 
-        if ffatypes is not None ^ ffatype_level is not None ^ ffatype_rules is not None:
+        def ternary_xor(a,b,c):
+            return a if not (b | c) else (b ^ c)
+
+        if not ternary_xor(ffatypes is not None, ffatype_level is not None, ffatype_rules is not None):
             raise ValueError('Only one of ffatypes, ffatype_rules, and ffatype_level can be defined!')
 
         if ffatypes is not None:
