@@ -54,18 +54,25 @@ class Horton(GenericJob):
                       }
         write_input(input_dict=input_dict, working_directory=self.working_directory)
 
-    def detect_ffatypes(self, ffatypes=None, ffatype_level=None):
+    def detect_ffatypes(self, ffatypes=None, ffatype_rules=None, ffatype_level=None):
         '''
             Define atom types by explicitely giving them through the
             ffatypes keyword, or by specifying the ffatype_level employing
             the built-in routine in QuickFF.
             Loading the atom types from an input file is not supported in pyiron.
         '''
-        if not ((ffatypes is not None) ^ (ffatype_level is not None)):
-            raise ValueError('Only one of ffatypes and ffatype_level can be defined!')
+
+        def ternary_xor(a,b,c):
+            return not (b | c) if a else (b ^ c)
+
+        if not ternary_xor(ffatypes is not None, ffatype_level is not None, ffatype_rules is not None):
+            raise ValueError('Only one of ffatypes, ffatype_rules, and ffatype_level can be defined!')
 
         if ffatype_level is not None:
             self.input['ffatypes'] = ffatype_level
+
+        if ffatype_rules is not None:
+            raise NotImplementedError('This should be very straightforward to implement. Look at Yaff or QuickFF plugin.')
 
         if ffatypes is not None:
             assert isinstance(ffatypes,list)
