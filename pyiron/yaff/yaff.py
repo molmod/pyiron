@@ -10,7 +10,6 @@ from quickff.tools import set_ffatypes
 log.set_level(log.silent)
 from molmod.units import *
 from molmod.constants import *
-from molmod.periodic import periodic as pt
 import subprocess
 
 import os, posixpath, numpy as np, h5py, matplotlib.pyplot as pp, stat, warnings
@@ -789,7 +788,7 @@ class Yaff(AtomisticGenericJob):
             http://molmod.github.io/yaff/ug_atselect.html) or by specifying
             the ffatype_level employing the built-in routine in QuickFF.
         '''
-        numbers = np.array([pt[symbol].number for symbol in self.structure.get_chemical_symbols()])
+        numbers = self.structure.get_atomic_numbers()
         if self.structure.cell is not None and self.structure.cell.volume > 0:
             system = System(numbers, self.structure.positions.copy()*angstrom, rvecs=self.structure.cell*angstrom, bonds=self.bonds)
         else:
@@ -848,10 +847,13 @@ class Yaff(AtomisticGenericJob):
 
 
     def write_input(self):
+        # Check whether there are inconsistencies in the parameter file
+        self.check_ffpars()
+        
         input_dict = {
             'jobtype': self.input['jobtype'],
             'symbols': self.structure.get_chemical_symbols(),
-            'numbers': np.array([pt[symbol].number for symbol in self.structure.get_chemical_symbols()]),
+            'numbers':self.structure.get_atomic_numbers(),
             'bonds': self.bonds,
             'ffatypes': self.ffatypes,
             'ffatype_ids': self.ffatype_ids,
@@ -877,9 +879,6 @@ class Yaff(AtomisticGenericJob):
             'enhanced': self.enhanced,
             'scan': self.scan,
         }
-
-        # Check whether there are inconsistencies in the parameter file
-        self.check_ffpars()
 
         input_dict['cell'] = None
         if self.structure.cell is not None and self.structure.cell.volume > 0:
@@ -1070,7 +1069,7 @@ class Yaff(AtomisticGenericJob):
             print(f.read())
 
     def get_yaff_system(self, snapshot=0):
-        numbers = np.array([pt[symbol].number for symbol in self.structure.get_chemical_symbols()])
+        numbers = self.structure.get_atomic_numbers()
         if snapshot==0:
             struct = self.structure
         else:
