@@ -1137,7 +1137,7 @@ class Yaff(AtomisticGenericJob):
         out = s._queue_adapter._adapter._execute_command(command, split_output=False, shell=True)
 
 
-        def store_fes(data,n_cv):
+        def _store_fes(data,n_cv):
             # store data
             with self.project_hdf5.open("output") as hdf5_output:
                 grp = hdf5_output.create_group('enhanced/fes')
@@ -1153,9 +1153,9 @@ class Yaff(AtomisticGenericJob):
             data = np.array([np.loadtxt(fnames[i]) for i in np.argsort(frames)])
         else:
             data = np.loadtxt(fn_out)
-            
+
         n_cv = (data.shape[-1]-1)//2
-        store_fes(data,n_cv)
+        _store_fes(data,n_cv)
 
 
     def check_ffpars(self):
