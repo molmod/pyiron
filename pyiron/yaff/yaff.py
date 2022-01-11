@@ -849,7 +849,7 @@ class Yaff(AtomisticGenericJob):
     def write_input(self):
         # Check whether there are inconsistencies in the parameter file
         self.check_ffpars()
-        
+
         input_dict = {
             'jobtype': self.input['jobtype'],
             'symbols': self.structure.get_chemical_symbols(),
@@ -1118,7 +1118,7 @@ class Yaff(AtomisticGenericJob):
         plumed_script = path+'plumed_job.sh'
 
         if settings is not None:
-            kv = " ".join(["--{} {}".format(k,v) for k,v in settings])
+            kv = " " + " ".join(["--{} {}".format(k,v) for k,v in settings.items()])
         else:
             kv = ""
 
@@ -1136,14 +1136,26 @@ class Yaff(AtomisticGenericJob):
         command = ['exec', plumed_script]
         out = s._queue_adapter._adapter._execute_command(command, split_output=False, shell=True)
 
-        # store data
-        data = np.loadtxt(fn_out)
-        dim = (data.shape[1]-1)//2
-        with self.project_hdf5.open("output") as hdf5_output:
-            grp = hdf5_output.create_group('enhanced/fes')
-            grp['bins'] = data[:,:dim]
-            grp['fes'] = data[:,dim]
-            grp['dfes'] = data[:,dim+1:]
+
+        def store_fes(data,n_cv):
+            # store data
+            with self.project_hdf5.open("output") as hdf5_output:
+                grp = hdf5_output.create_group('enhanced/fes')
+                grp['bins'] = data[...,:n_cv]
+                grp['fes'] = data[...,n_cv]
+                grp['dfes'] = data[...,n_cv+1:]
+
+        # Check if stride in options, then multiple output files are generated with INDEX.dat appended
+        if settings is not None and 'stride' in settings.keys():
+            import glob, re
+            fnames = glob.glob(os.path.join(path,fn_out)+'*')
+            frames = [int(re.findall(r'\d+', fn)[-1]) for fn in fnames] # find last number in filename
+            data = np.array([np.loadtxt(fnames[i]) for i in np.argsort(frames)])
+        else:
+            data = np.loadtxt(fn_out)
+            
+        n_cv = (data.shape[-1]-1)//2
+        store_fes(data,n_cv)
 
 
     def check_ffpars(self):
