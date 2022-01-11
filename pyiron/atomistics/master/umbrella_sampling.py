@@ -50,11 +50,11 @@ class USJobGenerator(JobGenerator):
         if self._job.traj_job is not None:
             job.structure = self._job.traj_job.get_structure(self._job.traj_job_idx[parameter[0]])
         elif self._job.ref_f is not None:
-            job.structure = self._job.ref_f(self.ref_job.structure,  self._job.input['cv_grid'][parameter[0]])
+            job.structure = self._job.ref_f(self._job.structure,  self._job.input['cv_grid'][parameter[0]])
         else:
             warnings.warn("You did not provide a trajectory or cv function, so each US simulation will start from the initial structure!")
-            assert self.ref_job.structure is not None
-            job.structure = self.ref_job.structure
+            assert self._job.structure is not None
+            job.structure = self._job.structure
 
         job.set_us(self._job.input['cvs'], self._job.input['kappas'][parameter[0]], self._job.input['cv_grid'][parameter[0]],
                                           fn_colvar='COLVAR', stride=self._job.input['stride'], temp=self._job.input['temp'])
@@ -239,7 +239,7 @@ class US(AtomisticParallelMaster):
         '''
 
         # Ref job corresponds to template
-        assert self.ref_job.structure is not None
+        assert self.structure is not None
         self.ref_f = f
 
 

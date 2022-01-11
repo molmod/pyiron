@@ -130,8 +130,8 @@ class RDF(object):
             ax[1].set_ylim(ylim_CN)
         else:
             pt.plot(self.d/angstrom, self.rdf, 'k-', drawstyle='steps-mid')
-            pt.set_ylabel('RDF')
-            pt.set_ylim(ylim)
+            pt.ylabel('RDF')
+            pt.ylim(ylim)
         pt.xlim(self.bins[0]/angstrom, self.bins[-1]/angstrom)
         pt.show()
 
