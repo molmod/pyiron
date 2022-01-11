@@ -239,7 +239,7 @@ class US(AtomisticParallelMaster):
         '''
 
         # Ref job corresponds to template
-        assert self._ref_job.structure is not None
+        assert self.ref_job.structure is not None
         self.ref_f = f
 
 
