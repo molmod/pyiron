@@ -75,7 +75,7 @@ class CV:
         if 'auxiliary_cvs' in group.keys():
             auxiliary_cvs = []
             for cv in group['auxiliary_cvs'].values():
-                auxiliary_cvs.append(colvar.CV().from_hdf(cv))
+                auxiliary_cvs.append(CV().from_hdf(cv))
         return CV(name=group['name'], plumed_identifier=group['plumed_identifier'], options=group['options'], auxiliary_cvs=auxiliary_cvs)
 
     def set_plumed_lines(self,lines):
@@ -103,17 +103,25 @@ class CV:
                     # convert to string
                     adapted_options[k] = ",".join([str(val) for val in values_list])
                 elif isinstance(v, str):
-                    # e.g. ATOMS=1-100
-                    values = "".join(v.split()) # remove all whitespacing
-
-                    # remove all auxilary_cv names, as they might contain numbers
 
                     def increment_match(matchobj):
                         return str(int(matchobj.group(0))+1)
                     def increment(s):
-                        return re.sub('\d+', replace, s)
+                        return re.sub('\d+', increment_match, s)
 
-                    adapted_options[k]=increment(values)
+                    # e.g. ATOMS=1-100
+                    values = "".join(v.split()) # remove all whitespacing
+
+                    # split text based on auxiliary cv names
+                    if len(self.auxiliary_cvs)>0:
+                        aux_names=[aux_cv.name for aux_cv in self.auxiliary_cvs]
+
+                        # () stores the separators as well, | is the or operator
+                        splitted_text = re.split('({})'.format('|'.join(aux_names)), values)
+                        adapted_options[k] = ''.join([increment(s) if s not in aux_names else s for s in splitted_text ])
+                    else:
+                        adapted_options[k]=increment(values)
+
                 elif isinstance(v, int):
                     adapted_options[k]=v+1
             else:
