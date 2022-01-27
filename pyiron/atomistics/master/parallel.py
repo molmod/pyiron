@@ -39,7 +39,7 @@ class AtomisticParallelMaster(ParallelMaster, AtomisticGenericJob):
             self._ref_job.structure = basis
         else:
             raise ValueError(
-                "A structure can only be set after a reference job has been assinged."
+                "A structure can only be set after a reference job has been assigned."
             )
 
     def get_structure(self, iteration_step=-1):

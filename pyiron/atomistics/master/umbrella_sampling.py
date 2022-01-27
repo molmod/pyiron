@@ -5,9 +5,11 @@ from molmod.units import *
 import subprocess, os, stat, warnings
 
 from pyiron.base.settings.generic import Settings
-from pyiron.atomistics.master.parallel import AtomisticParallelMaster
 from pyiron.base.master.parallel import JobGenerator
 from pyiron.atomistics.structure.atoms import Atoms
+from pyiron.atomistics.master.parallel import AtomisticParallelMaster
+
+import pyiron.yaff.colvar as colvar
 
 
 s = Settings()
@@ -17,6 +19,13 @@ def get_wham_path():
         p = os.path.join(resource_path, "yaff", "bin", "wham.sh")
         if os.path.exists(p):
             return p
+
+def convert_val(val,unit=None):
+    scale = 1 if unit is None else unit
+    if isinstance(val, list) or isinstance(val, np.ndarray):
+        return [str(l/scale) for l in val]
+    else:
+        return str(val/scale)
 
 class InputError(Exception):
     """Simple error class with clear meaning."""
@@ -56,8 +65,8 @@ class USJobGenerator(JobGenerator):
             assert self._job.structure is not None
             job.structure = self._job.structure
 
-        job.set_us(self._job.input['cvs'], self._job.input['kappas'][parameter[0]], self._job.input['cv_grid'][parameter[0]],
-                                          fn_colvar='COLVAR', stride=self._job.input['stride'], temp=self._job.input['temp'])
+        job.set_us(self._job.cvs, self._job.input['kappas'][parameter[0]], self._job.input['cv_grid'][parameter[0]],
+                                    fn_colvar='COLVAR', stride=self._job.input['stride'], temp=self._job.input['temp'])
         return job
 
 
@@ -78,7 +87,6 @@ class US(AtomisticParallelMaster):
         self.input['stride']      = (10, 'step for output printed to COLVAR output file.')
         self.input['temp']        = (300*kelvin, 'the system temperature')
         self.input['cv_grid']     = ([0], 'cv grid')
-        self.input['cvs']         = ([('distance', [0,1])], 'cv(s), see set_us() for description')
 
         self.input['h_min']       = (None , 'lowest value(s) of the cv(s) for WHAM')
         self.input['h_max']       = (None , 'highest value(s) of the cv(s) for WHAM')
@@ -87,6 +95,7 @@ class US(AtomisticParallelMaster):
         self.input['periodicity'] = (None , 'periodicity of cv(s)')
         self.input['tol']         = (0.00001 , 'WHAM converges if free energy changes < tol')
 
+        self.cvs = None            # 'list of pyiron.yaff.colvar.CV objects'
         self.traj_job = None       # reference job with trajectory, does need to be initialized, it is automatically an attribute
         self.traj_job_idx = None   # idx which are selected by generate_structures_traj
         self.ref_f = None          # function to transform template structure to structure with correct cv
@@ -95,27 +104,12 @@ class US(AtomisticParallelMaster):
 
     def set_us(self,cvs,kappas,cv_grid,stride=10,temp=300*kelvin,h_min=None,h_max=None,h_bins=None,periodicity=None,tol=0.00001):
         '''
-            Setup an Umbrella sampling run using PLUMED along the internal coordinates
+            Setup an Umbrella sampling run using PLUMED along the collective variables
             defined in the CVs argument.
 
             **Arguments**
 
-            cvs     a list of entries defining each a collective varibale. Each
-                    of these entries should be of the form (kind, [i, j, ...])
-
-                    Herein, kind defines the kind of CVs as implemented in PLUMED:
-
-                        i.e. distance, angle, torsion, volume, cell, ... see
-                        https://www.plumed.org/doc-v2.5/user-doc/html/_colvar.html
-                        for more information).
-
-                    and [i, j, ...] is a list of atom indices, starting from 0, involved in this
-                    CV. If no atom indices are required for e.g. volume, provide an empty list.
-
-                    An example for a 1D umbrella sampling simulation using the distance between
-                    atoms 2 and 4:
-
-                        cvs = [('distance', [2,4])]
+            cvs     a list of pyiron.yaff.cv.CV objects
 
             kappas  the value(s) of the force constant of the harmonic bias potential,
                     requires a dimension of (-1,len(cvs))
@@ -124,7 +118,7 @@ class US(AtomisticParallelMaster):
             cv_grid
                     the locations of the umbrellas
 
-            stride  the number of steps after which the internal coordinate
+            stride  the number of steps after which the colelctive variable
                     values and bias are printed to the COLVAR output file.
 
             temp    the system temperature
@@ -141,11 +135,15 @@ class US(AtomisticParallelMaster):
             tol     WHAM converges if free energy changes < tol
         '''
 
-        self.input['cvs']         = cvs
-        self.input['kappas']      = np.asarray(kappas).tolist() # input attributes can't be numpy arrays, but can be lists
-        self.input['cv_grid']     = np.asarray(cv_grid).tolist()
-        self.input['stride']      = stride
-        self.input['temp']        = temp
+        self.cvs = cvs
+        self.input['kappas']  = np.asarray(kappas).tolist() # input attributes can't be numpy arrays, but can be lists
+        self.input['cv_grid'] = np.asarray(cv_grid).tolist()
+        self.input['stride']  = stride
+        self.input['temp']    = temp
+
+        # Sanity check for cvs
+        for cv in self.cvs:
+            assert isinstance(cv,colvar.CV)
 
         # Check if cv_grid is well defined
         try:
@@ -161,7 +159,7 @@ class US(AtomisticParallelMaster):
             shape = np.asarray(self.input['cv_grid']).shape
             if len(shape)>1:
                 assert len(shape)==2
-                assert shape[1]==len(self.input['cvs'])
+                assert shape[1]==len(self.cvs)
         except AssertionError:
             raise InputError('Your cv_grid has the wrong shape. It should either be a flat array/list or an array with shape (N,#cvs)')
 
@@ -170,12 +168,12 @@ class US(AtomisticParallelMaster):
             shape = np.asarray(self.input['kappas']).shape
             if len(shape)==0: # if it is just a number
                 warnings.warn('You only provided a single kappa value. All kappa values will be equal to this value.')
-                self.input['kappas'] = (np.ones((len(self.input['cv_grid']),len(self.input['cvs']))) * self.input['kappas']).tolist()
+                self.input['kappas'] = (np.ones((len(self.input['cv_grid']),len(self.cvs))) * self.input['kappas']).tolist()
             else:
-                assert shape[-1]==len(self.input['cvs'])
+                assert shape[-1]==len(self.cvs)
                 if len(shape)==1:
                     warnings.warn('You only provided a single kappa value for each cv. The kappa values at each location will be equal to these values.')
-                    self.input['kappas'] = (np.ones((len(self.input['cv_grid']),len(self.input['cvs']))) * self.input['kappas']).tolist()
+                    self.input['kappas'] = (np.ones((len(self.input['cv_grid']),len(self.cvs))) * self.input['kappas']).tolist()
                 elif len(shape)>1:
                     assert len(shape)==2
                     assert shape[0]==len(self.input['cv_grid'])
@@ -209,22 +207,20 @@ class US(AtomisticParallelMaster):
         self.input['tol']         = tol
 
 
-    def generate_structures_traj(self,job,cv_f):
+    def generate_structures_traj(self,job):
         '''
-            Generates structure list based on cv grid and cv function using the trajectory data from another job (e.g. MD or MTD job)
+            Generates structure list based on cv grid and provided CV objects using the trajectory data from another job (e.g. MD or MTD job)
 
             **Arguments**
 
             job      job object which contains enough snapshots in the region of interest
-            cv_f     function object that takes a job object as input and returns the corresponding CV(s) list
         '''
-
-        cv = cv_f(job).reshape(-1,len(self.input['cvs']))
+        cv_values = np.array([cv.get_cv_values(job) for cv in self.cvs]).T
         idx = np.zeros(len(self.input['cv_grid']),dtype=int)
         max_deviation = 0.
         for n,loc in enumerate(self.input['cv_grid']):
-            idx[n] = np.argmin(np.linalg.norm(loc-cv,axis=-1))
-            max_deviation = max(max_deviation,np.linalg.norm(loc-cv,axis=-1)[idx[n]])
+            idx[n] = np.argmin(np.linalg.norm(loc-cv_values,axis=-1))
+            max_deviation = max(max_deviation,np.linalg.norm(loc-cv_values,axis=-1)[idx[n]])
         print('The largest deviation is equal to {}'.format(max_deviation))
         self.traj_job = job
         self.traj_job_idx = idx
@@ -235,7 +231,7 @@ class US(AtomisticParallelMaster):
 
             **Arguments**
 
-            f     function object f(structure, cv) that takes the reference structure object and a cv change as input and returns the altered structure
+            f     function object f(structure, cv_values) that takes the reference structure object and the target cv values as input and returns the altered structure
         '''
 
         # Ref job corresponds to template
@@ -331,20 +327,20 @@ class US(AtomisticParallelMaster):
         super(US, self).to_hdf(hdf=hdf, group_name=group_name)
         with self.project_hdf5.open('input') as hdf5_input:
             self.input.to_hdf(hdf5_input)
+            grp = hdf5_input.create_group('cvs')
+            for cv in self.cvs:
+                cv.to_hdf(grp)
 
     def from_hdf(self, hdf=None, group_name=None):
         super(US, self).from_hdf(hdf=hdf, group_name=group_name)
         with self.project_hdf5.open('input') as hdf5_input:
             self.input.from_hdf(hdf5_input)
+            cvs = []
+            for cv in hdf5_input['cvs'].values():
+                cvs.append(colvar.CV().from_hdf(cv))
+            self.cvs = cvs
 
     def collect_output(self):
-        def convert_val(val,unit=None):
-            scale = 1 if unit is None else unit
-            if isinstance(val, list) or isinstance(val, np.ndarray):
-                return [str(l/scale) for l in val]
-            else:
-                return str(val/scale)
-
         # Files to store data of wham
         f_metadata = os.path.join(self.working_directory, 'metadata')
         f_fes      = os.path.join(self.working_directory, 'fes.dat')
@@ -374,6 +370,108 @@ class US(AtomisticParallelMaster):
         with self.project_hdf5.open('output') as hdf5_out:
             hdf5_out['bins'] = bins
             hdf5_out['fes'] = fes
+
+    def plot_1D_FES(self,equilibration_time=None,ax=None,xunit=None,yunit='kjmol',label=None,smooth=False,window_length=11,poly_order=3,verbose=True):
+        '''
+            Plots the free energy surface for your calculation to the axes object.
+            If ax is None a figure object is created for you.
+
+            In case you want a certain equilibration time to be taken into account,
+            you can specify it as well, and the free energy is recalculated (but not stored).
+
+            You can also smooth the obtained free energy profile using the Savitzky-Golay filter
+
+            **Arguments**
+
+            equilibration_time
+                    the minimal time required for each simulation to equilibrate (in femtoseconds)
+
+            ax      an Axes object of matplotlib in which the generated data is plotted
+
+            xunit,yunit
+                    units in which the data is plotted (default unit of y-axis is kJ/mol)
+
+            label   label for the plotted data
+
+            smooth  smooths the obtained free energy profile
+
+            window_length, poly_order
+                    argument of the Savitzky-Golay filter
+
+            verbose
+                    if True, prints the number of samples that are taken into account
+        '''
+
+        # Create figure is no Axes object is parsed
+        if ax is None:
+            pt.figure()
+            ax = pt.gca()
+
+        # If equilibration_time is not None, calculate the new FES
+        # Files to store data of wham
+        if equilibration_time is not None:
+            f_metadata = os.path.join(self.working_directory, 'metadata_eq')
+            f_fes      = os.path.join(self.working_directory, 'fes_eq.dat')
+
+            with open(f_metadata, 'w') as f:
+                for job_id in self.child_ids:
+                    job = self.project_hdf5.inspect(job_id)
+
+                    time = job['output/enhanced/trajectory/time'].reshape(-1,1)
+                    cv = job['output/enhanced/trajectory/cv']
+                    bias = job['output/enhanced/trajectory/bias'].reshape(-1,1)
+
+                    time_idx = np.argmin(np.abs(time-equilibration_time))
+                    if verbose:
+                        print('{}/{} samples taken into account.'.format(len(time)-time_idx, len(time)))
+                        verbose = False # avoid printing this many times
+
+                    time = time[time_idx:]
+                    cv = cv[time_idx:]
+                    bias = bias[time_idx:]
+
+                    data = np.concatenate((time,cv,bias),axis=-1)
+
+                    # Write data to COLVAR_eq file
+                    np.savetxt(os.path.join(job.working_directory,'COLVAR_eq'), data, fmt='%.5e', delimiter='\t', newline='\n')
+
+                    # Write metadata file
+                    loc = convert_val(job['input/generic/enhanced/loc'])
+                    kappa = convert_val(job['input/generic/enhanced/kappa'],unit=kjmol)
+                    f.write('{}/COLVAR_eq\t'.format(job.working_directory) + '\t'.join(loc) + '\t' + '\t'.join(kappa) + '\n') # format of colvar needs to be TIME CV1 (CV2)
+
+
+            # Execute wham code
+            self.wham(self.input['h_min'], self.input['h_max'], self.input['h_bins'], f_metadata, f_fes, periodicity=self.input['periodicity'], tol=self.input['tol'])
+
+            # Process output of wham code
+            data = np.loadtxt(f_fes)
+
+            if len(self.input['cvs']) == 1:
+                bins = data[:,0]
+                fes = data[:,1]
+            elif len(self.input['cvs']) == 2:
+                bins = data[:,0:2]
+                fes = data[:,2]
+        else:
+            bins = self['output/bins']
+            fes = self['output/fes']
+
+        # Smooth data if needed
+        if smooth:
+            from scipy.signal import savgol_filter
+            fes = savgol_filter(fes, window_length, poly_order)
+
+        # Scale data if needed
+        if xunit is not None:
+            bins = bins/eval(xunit)
+
+        if yunit is not None:
+            fes = fes*kjmol/eval(yunit)
+
+        # Plot the data on the Axes
+        ax.plot(bins,fes,label=label)
+
 
     def restart(self):
         for job in self.iter_jobs():
