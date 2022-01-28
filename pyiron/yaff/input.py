@@ -25,10 +25,13 @@ class YaffInput(GenericParameters):
         '''
 
         input_str = inspect.cleandoc("""\
-        rcut 28.345892008818783 #(FF) real space cutoff
+        rcut 22.676713607055024 #(FF) real space cutoff
         alpha_scale 3.2 #(FF) scale for ewald alpha parameter
         gcut_scale 1.5 #(FF) scale for ewald reciprocal cutoff parameter
+        tailcorrections True #(FF) correct for neglected interactions by finite rcut, assuming uniform system outside rcut (allows smaller rcut)
         smooth_ei True #(FF) smoothen cutoff for real space electrostatics
+        use_lammps False #(FF) uses the LAMMPS code to speed up non-covalent energy contribution calculations
+        log_lammps lammps.log #(FF) filename for LAMMPS log, if None nothing is stored
         gpos_rms 1e-8 #(OPT) convergence criterion for RMS of gradients towards atomic coordinates
         dpos_rms 1e-6 #(OPT) convergence criterion for RMS of differences of atomic coordinates
         grvecs_rms 1e-8 #(OPT) convergence criterion for RMS of gradients towards cell parameters
@@ -41,6 +44,7 @@ class YaffInput(GenericParameters):
         timecon_baro 41341.37333664683 #(MD) timeconstant for barostat
         nsteps 1000 #(GEN) number of steps for opt or md
         h5step 5 #(GEN) stores system properties every h5step
+
         """)
         self.load_string(input_str)
 
@@ -50,16 +54,20 @@ class InputWriter(object):
     The Yaff InputWriter is called to write the Yaff specific input files.
     '''
 
-    common = inspect.cleandoc("""#! /usr/bin/python
+    common_import = inspect.cleandoc("""#! /usr/bin/python
 
     from molmod.units import *
     from yaff import *
     import h5py, numpy as np
+    """) +'\n'
 
-    #Setting up system and force field
+
+    common_input = inspect.cleandoc("""#Setting up system and force field
     system = System.from_file('system.chk')
-    ff = ForceField.generate(system, 'pars.txt', rcut={rcut}*angstrom, alpha_scale={alpha_scale}, gcut_scale={gcut_scale}, smooth_ei={smooth_ei})
+    ff = ForceField.generate(system, 'pars.txt', rcut={rcut}*angstrom, alpha_scale={alpha_scale}, gcut_scale={gcut_scale}, smooth_ei={smooth_ei}, tailcorrections={tailcorrections})
+    """) +'\n'
 
+    common_output = inspect.cleandoc("""
     #Setting up output
     f = h5py.File('output.h5', mode='w')
     hdf5 = HDF5Writer(f, step={h5step})
@@ -70,11 +78,100 @@ class InputWriter(object):
     #Setting up simulation
     """) + '\n'
 
+    common_lammps_import = inspect.cleandoc("""
+    # Setup MPI
+    from mpi4py import MPI
+    comm = MPI.COMM_WORLD
+    rank = comm.Get_rank()
+    nprocs = comm.Get_size()
+
+    # Turn off logging for all processes, except one
+    from yaff import log
+    log.set_level(log.silent)
+    if rank==0: log.set_level(log.medium)
+    """) + '\n'
+
+    common_lammps_input = inspect.cleandoc("""
+    fn_sys = 'system.dat' # LAMMPS System file
+    fn_table = 'table.dat' # LAMMPS force field tabulation file
+
+    # Tabulate the non-bonded interactions
+    # Bonded interactions remain calculated by Yaff
+    ff_lammps = swap_noncovalent_lammps(ff, fn_system = fn_sys, fn_log={fn_log}
+                fn_table = fn_table, comm = comm)
+
+    # Perform small sanity check for LAMMPS vs Yaff
+    gpos, vtens = np.zeros((sys.natom, 3)), np.zeros((3, 3))
+    gpos_lammps, vtens_lammps = np.zeros((sys.natom, 3)), np.zeros((3, 3))
+    e = ff.compute(gpos, vtens)
+    e_lammps = ff_lammps.compute(gpos_lammps, vtens_lammps)
+    p = np.trace(vtens)/3.0/ff.system.cell.volume
+    p_lammps = np.trace(vtens_lammps)/3.0/ff.system.cell.volume
+    print("E(Yaff) = %12.3f E(LAMMPS) = %12.3f deltaE = %12.3e kJ/mol"%(e/kjmol,e_lammps/kjmol,(e_lammps-e)/kjmol))
+    print("P(Yaff) = %12.3f P(LAMMPS) = %12.3f deltaP = %12.3e bar"%(p/bar,p_lammps/bar,(p_lammps-p)/bar))
+
+    # Replace ff variable reference to lammps
+    ff = ff_lammps
+    """) + '\n'
+
+    common_lammps_output = inspect.cleandoc("""
+    if rank==0:
+        f = h5py.File('output.h5', mode='w')
+        hdf5 = HDF5Writer(f, step={h5step})
+        r = h5py.File('restart.h5', mode='w')
+        restart = RestartWriter(r, step=10000)
+        hooks = [hdf,hdf_restart] # integrator hooks will be appended to this list
+    else:
+        hooks = [] # integrator hooks will be appended to this list
+
+    #Setting up simulation
+    """) + '\n'
+
     plumed_part = inspect.cleandoc("""
     plumed = ForcePartPlumed(ff.system, fn='plumed.dat')
     ff.add_part(plumed)
     hooks.append(plumed)
     """)+ '\n\n'
+
+    scan_integrator_class = inspect.cleandoc("""
+    # Define scan iterator
+    class ScanIntegrator(Iterative):
+        default_state = [
+            AttributeStateItem('counter'),
+            AttributeStateItem('epot'),
+            PosStateItem(),
+            VolumeStateItem(),
+            CellStateItem(),
+            EPotContribStateItem(),
+        ]
+
+        log_name = 'SCAN'
+
+        def __init__(self, ff, h5_path, state=None, hooks=None, counter0=1):
+            self.h5 = h5py.File(h5_path,mode='r')
+            self.do_cell = 'scan/rvecs' in self.h5
+            self.assign_structure(ff, self.h5, self.do_cell, 0)
+            Iterative.__init__(self, ff, state, hooks, counter0)
+
+        @staticmethod
+        def assign_structure(ff,h5,do_cell,counter):
+            ff.update_pos(h5['scan/positions'][counter])
+            if do_cell:
+                ff.update_rvecs(h5['scan/rvecs'][counter])
+
+        def initialize(self):
+            self.epot = self.ff.compute()
+            Iterative.initialize(self)
+
+        def propagate(self):
+            # counter0 should start from 1 since the counter is updated after evaluation
+            self.assign_structure(self.ff, self.h5, self.do_cell, self.counter)
+            self.epot = self.ff.compute()
+            Iterative.propagate(self)
+
+        def finalize(self):
+            self.h5.close()
+        """) + '\n'
 
     tail = """\n"""
 
@@ -121,11 +218,24 @@ class InputWriter(object):
             raise IOError('Invalid job type for Yaff job, received %s' %jobtype)
 
     def write_yopt(self):
-        body = InputWriter.common.format(
+        body = InputWriter.common_import
+        if self.input_dict['use_lammps']:
+            body += InputWriter.common_lammps_import
+
+        body += InputWriter.common_input.format(
             rcut=self.input_dict['rcut']/angstrom, alpha_scale=self.input_dict['alpha_scale'],
             gcut_scale=self.input_dict['gcut_scale'], smooth_ei=self.input_dict['smooth_ei'],
-            h5step=1,
+            tailcorrections=self.input_dict['tailcorrections'],
         )
+        if self.input_dict['use_lammps']:
+            body += InputWriter.common_lammps_input.format(self.input_dict['log_lammps'])
+
+        if self.input_dict['use_lammps']:
+            body += InputWriter.common_lammps_output.format(h5step=1,)
+        else:
+            body += InputWriter.common_output.format(h5step=1,)
+
+        # Specific jobtype lines
         body += "dof = CartesianDOF(ff, gpos_rms={gpos_rms}, dpos_rms={dpos_rms})".format(
             gpos_rms=self.input_dict['gpos_rms'],dpos_rms=self.input_dict['dpos_rms']
         )
@@ -139,11 +249,24 @@ class InputWriter(object):
             f.write(body)
 
     def write_yopt_cell(self):
-        body = InputWriter.common.format(
+        body = InputWriter.common_import
+        if self.input_dict['use_lammps']:
+            body += InputWriter.common_lammps_import
+
+        body += InputWriter.common_input.format(
             rcut=self.input_dict['rcut']/angstrom, alpha_scale=self.input_dict['alpha_scale'],
             gcut_scale=self.input_dict['gcut_scale'], smooth_ei=self.input_dict['smooth_ei'],
-            h5step=1,
+            tailcorrections=self.input_dict['tailcorrections'],
         )
+        if self.input_dict['use_lammps']:
+            body += InputWriter.common_lammps_input.format(self.input_dict['log_lammps'])
+
+        if self.input_dict['use_lammps']:
+            body += InputWriter.common_lammps_output.format(h5step=1,)
+        else:
+            body += InputWriter.common_output.format(h5step=1,)
+
+        # Specific jobtype lines
         body += "dof = StrainCellDOF(ff, gpos_rms={gpos_rms}, dpos_rms={dpos_rms}, grvecs_rms={grvecs_rms}, drvecs_rms={drvecs_rms}, do_frozen=False)".format(
             gpos_rms=self.input_dict['gpos_rms'],dpos_rms=self.input_dict['dpos_rms'],
             grvecs_rms=self.input_dict['grvecs_rms'],drvecs_rms=self.input_dict['drvecs_rms']
@@ -159,11 +282,24 @@ class InputWriter(object):
 
     def __write_ysp(self):
         """Deprecated due to not making a trajectory group"""
-        body = InputWriter.common.format(
+        body = InputWriter.common_import
+        if self.input_dict['use_lammps']:
+            body += InputWriter.common_lammps_import
+
+        body += InputWriter.common_input.format(
             rcut=self.input_dict['rcut']/angstrom, alpha_scale=self.input_dict['alpha_scale'],
             gcut_scale=self.input_dict['gcut_scale'], smooth_ei=self.input_dict['smooth_ei'],
-            h5step=1,
+            tailcorrections=self.input_dict['tailcorrections'],
         )
+        if self.input_dict['use_lammps']:
+            body += InputWriter.common_lammps_input.format(self.input_dict['log_lammps'])
+
+        if self.input_dict['use_lammps']:
+            body += InputWriter.common_lammps_output.format(h5step=1,)
+        else:
+            body += InputWriter.common_output.format(h5step=1,)
+
+        # Specific jobtype lines
         body += inspect.cleandoc("""
         energy = ff.compute()
         system.to_hdf5(f)
@@ -174,11 +310,24 @@ class InputWriter(object):
             f.write(body)
 
     def write_ysp(self):
-        body = InputWriter.common.format(
+        body = InputWriter.common_import
+        if self.input_dict['use_lammps']:
+            body += InputWriter.common_lammps_import
+
+        body += InputWriter.common_input.format(
             rcut=self.input_dict['rcut']/angstrom, alpha_scale=self.input_dict['alpha_scale'],
             gcut_scale=self.input_dict['gcut_scale'], smooth_ei=self.input_dict['smooth_ei'],
-            h5step=1,
+            tailcorrections=self.input_dict['tailcorrections'],
         )
+        if self.input_dict['use_lammps']:
+            body += InputWriter.common_lammps_input.format(self.input_dict['log_lammps'])
+
+        if self.input_dict['use_lammps']:
+            body += InputWriter.common_lammps_output.format(h5step=1,)
+        else:
+            body += InputWriter.common_output.format(h5step=1,)
+
+        # Specific jobtype lines
         body += "dof = CartesianDOF(ff, gpos_rms={gpos_rms}, dpos_rms={dpos_rms})".format(
             gpos_rms=self.input_dict['gpos_rms'],dpos_rms=self.input_dict['dpos_rms']
         )
@@ -191,11 +340,24 @@ class InputWriter(object):
             f.write(body)
 
     def write_yhess(self):
-        body = InputWriter.common.format(
+        body = InputWriter.common_import
+        if self.input_dict['use_lammps']:
+            body += InputWriter.common_lammps_import
+
+        body += InputWriter.common_input.format(
             rcut=self.input_dict['rcut']/angstrom, alpha_scale=self.input_dict['alpha_scale'],
             gcut_scale=self.input_dict['gcut_scale'], smooth_ei=self.input_dict['smooth_ei'],
-            h5step=1,
+            tailcorrections=self.input_dict['tailcorrections'],
         )
+        if self.input_dict['use_lammps']:
+            body += InputWriter.common_lammps_input.format(self.input_dict['log_lammps'])
+
+        if self.input_dict['use_lammps']:
+            body += InputWriter.common_lammps_output.format(h5step=1,)
+        else:
+            body += InputWriter.common_output.format(h5step=1,)
+
+        # Specific jobtype lines
         body +=inspect.cleandoc("""dof = CartesianDOF(ff)
 
         gpos  = np.zeros((len(system.numbers), 3), float)
@@ -212,13 +374,27 @@ class InputWriter(object):
             f.write(body)
 
     def write_ynve(self):
-        body = InputWriter.common.format(
+        body = InputWriter.common_import
+        if self.input_dict['use_lammps']:
+            body += InputWriter.common_lammps_import
+
+        body += InputWriter.common_input.format(
             rcut=self.input_dict['rcut']/angstrom, alpha_scale=self.input_dict['alpha_scale'],
             gcut_scale=self.input_dict['gcut_scale'], smooth_ei=self.input_dict['smooth_ei'],
-            h5step=self.input_dict['h5step'],
+            tailcorrections=self.input_dict['tailcorrections'],
         )
+        if self.input_dict['use_lammps']:
+            body += InputWriter.common_lammps_input.format(self.input_dict['log_lammps'])
+
+        if self.input_dict['use_lammps']:
+            body += InputWriter.common_lammps_output.format(h5step=self.input_dict['h5step'],)
+        else:
+            body += InputWriter.common_output.format(h5step=self.input_dict['h5step'],)
+
         if self.input_dict['enhanced'] is not None:
             body += InputWriter.plumed_part
+
+        # Specific jobtype lines
         body += inspect.cleandoc("""
         hooks.append(VerletScreenLog(step=1000))
         md = VerletIntegrator(ff, {timestep}*femtosecond, hooks=hooks)
@@ -229,13 +405,27 @@ class InputWriter(object):
             f.write(body)
 
     def write_ynvt(self):
-        body = InputWriter.common.format(
+        body = InputWriter.common_import
+        if self.input_dict['use_lammps']:
+            body += InputWriter.common_lammps_import
+
+        body += InputWriter.common_input.format(
             rcut=self.input_dict['rcut']/angstrom, alpha_scale=self.input_dict['alpha_scale'],
             gcut_scale=self.input_dict['gcut_scale'], smooth_ei=self.input_dict['smooth_ei'],
-            h5step=self.input_dict['h5step'],
+            tailcorrections=self.input_dict['tailcorrections'],
         )
+        if self.input_dict['use_lammps']:
+            body += InputWriter.common_lammps_input.format(self.input_dict['log_lammps'])
+
+        if self.input_dict['use_lammps']:
+            body += InputWriter.common_lammps_output.format(h5step=self.input_dict['h5step'],)
+        else:
+            body += InputWriter.common_output.format(h5step=self.input_dict['h5step'],)
+
         if self.input_dict['enhanced'] is not None:
             body += InputWriter.plumed_part
+
+        # Specific jobtype lines
         body += inspect.cleandoc("""
         temp = {temp}*kelvin
         thermo = NHCThermostat(temp, timecon={timecon_thermo}*femtosecond)
@@ -253,13 +443,27 @@ class InputWriter(object):
             f.write(body)
 
     def write_ynpt(self):
-        body = InputWriter.common.format(
+        body = InputWriter.common_import
+        if self.input_dict['use_lammps']:
+            body += InputWriter.common_lammps_import
+
+        body += InputWriter.common_input.format(
             rcut=self.input_dict['rcut']/angstrom, alpha_scale=self.input_dict['alpha_scale'],
             gcut_scale=self.input_dict['gcut_scale'], smooth_ei=self.input_dict['smooth_ei'],
-            h5step=self.input_dict['h5step'],
+            tailcorrections=self.input_dict['tailcorrections'],
         )
+        if self.input_dict['use_lammps']:
+            body += InputWriter.common_lammps_input.format(self.input_dict['log_lammps'])
+
+        if self.input_dict['use_lammps']:
+            body += InputWriter.common_lammps_output.format(h5step=self.input_dict['h5step'],)
+        else:
+            body += InputWriter.common_output.format(h5step=self.input_dict['h5step'],)
+
         if self.input_dict['enhanced'] is not None:
             body += InputWriter.plumed_part
+
+        # Specific jobtype lines
         body += inspect.cleandoc("""
         temp = {temp}*kelvin
         press = {press}*bar
@@ -293,68 +497,32 @@ class InputWriter(object):
         h5.close()
 
         # Write script file which reads and adapts h5 file with energy of each snapshot
-        body = inspect.cleandoc("""#! /usr/bin/python
+        body = InputWriter.common_import
+        if self.input_dict['use_lammps']:
+            body += InputWriter.common_lammps_import
 
-        from molmod.units import *
-        from yaff import *
-        import h5py, numpy as np
+        body += InputWriter.common_input.format(
+            rcut=self.input_dict['rcut']/angstrom, alpha_scale=self.input_dict['alpha_scale'],
+            gcut_scale=self.input_dict['gcut_scale'], smooth_ei=self.input_dict['smooth_ei'],
+            tailcorrections=self.input_dict['tailcorrections'],
+        )
+        if self.input_dict['use_lammps']:
+            body += InputWriter.common_lammps_input.format(self.input_dict['log_lammps'])
 
-        # Define scan iterator
-        class ScanIntegrator(Iterative):
-            default_state = [
-                AttributeStateItem('counter'),
-                AttributeStateItem('epot'),
-                PosStateItem(),
-                VolumeStateItem(),
-                CellStateItem(),
-                EPotContribStateItem(),
-            ]
+        body += InputWriter.scan_integrator_class
 
-            log_name = 'SCAN'
+        if self.input_dict['use_lammps']:
+            body += InputWriter.common_lammps_output.format(h5step=1,)
+        else:
+            body += InputWriter.common_output.format(h5step=1,)
 
-            def __init__(self, ff, h5_path, state=None, hooks=None, counter0=1):
-                self.h5 = h5py.File(h5_path,mode='r')
-                self.do_cell = 'scan/rvecs' in self.h5
-                self.assign_structure(ff, self.h5, self.do_cell, 0)
-                Iterative.__init__(self, ff, state, hooks, counter0)
-
-            @staticmethod
-            def assign_structure(ff,h5,do_cell,counter):
-                ff.update_pos(h5['scan/positions'][counter])
-                if do_cell:
-                    ff.update_rvecs(h5['scan/rvecs'][counter])
-
-            def initialize(self):
-                self.epot = self.ff.compute()
-                Iterative.initialize(self)
-
-            def propagate(self):
-                # counter0 should start from 1 since the counter is updated after evaluation
-                self.assign_structure(self.ff, self.h5, self.do_cell, self.counter)
-                self.epot = self.ff.compute()
-                Iterative.propagate(self)
-
-            def finalize(self):
-                self.h5.close()
-
-
-        #Setting up system and force field
-        system = System.from_file('system.chk')
-        ff = ForceField.generate(system, 'pars.txt', rcut={rcut}*angstrom, alpha_scale={alpha_scale}, gcut_scale={gcut_scale}, smooth_ei={smooth_ei})
-
-        #Setting up output
-        f = h5py.File('output.h5', mode='w')
-        hdf5 = HDF5Writer(f, step=1)
-
+        # Specific jobtype lines
+        body += inspect.cleandoc("""
         #Setting up simulation
-        scan = ScanIntegrator(ff,'structures.h5',hooks=[hdf5])
+        scan = ScanIntegrator(ff,'structures.h5',hooks=hooks)
         scan.run({steps})
-
-            """.format(
-                rcut=self.input_dict['rcut']/angstrom, alpha_scale=self.input_dict['alpha_scale'],
-                gcut_scale=self.input_dict['gcut_scale'], smooth_ei=self.input_dict['smooth_ei'],
-                steps=scan_data['positions'].shape[0]-1
-            ))
+            """.format(steps=scan_data['positions'].shape[0]-1)
+        )
 
         with open(posixpath.join(self.working_directory,'yscript.py'), 'w') as f:
             f.write(body)

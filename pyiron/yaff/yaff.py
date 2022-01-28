@@ -363,12 +363,17 @@ class Yaff(AtomisticGenericJob):
 
         self.input['ffpars'] = ffpars
 
+    def enable_lammps(self):
+        self.input['use_lammps'] = True
+
     def write_input(self):
         # Check whether there are inconsistencies in the parameter file
         self.check_ffpars()
 
         input_dict = {
             'jobtype': self.input['jobtype'],
+            'use_lammps': self.input['use_lammps'],
+            'log_lammps': self.input['log_lammps'],
             'symbols': self.structure.get_chemical_symbols(),
             'numbers':self.structure.get_atomic_numbers(),
             'bonds': self.bonds,
@@ -381,6 +386,7 @@ class Yaff(AtomisticGenericJob):
             'alpha_scale': self.input['alpha_scale'],
             'gcut_scale': self.input['gcut_scale'],
             'smooth_ei': self.input['smooth_ei'],
+            'tailcorrections': self.input['tailcorrections'],
             'nsteps': self.input['nsteps'],
             'h5step': self.input['h5step'],
             'gpos_rms': self.input['gpos_rms'],
@@ -397,10 +403,20 @@ class Yaff(AtomisticGenericJob):
             'scan': self.scan,
         }
 
+        # Sanity checks
         input_dict['cell'] = None
         if self.structure.cell is not None and self.structure.cell.volume > 0:
              input_dict['cell'] = self.structure.get_cell()
 
+        if self.input['use_lammps']:
+            assert self.server.cores > 1, 'When using the LAMMPS coupling, use more than one core!'
+            if not 'mpi' in self.executable.version:
+                self.executable.version = '2019_mpi'
+                print('You did not select a mpi executable. The 2019_mpi version was automatically assigned.')
+        else:
+            assert self.server.cores == 1, 'Yaff only supports a single core!'
+
+        # Write input files
         input_writer = InputWriter(input_dict,working_directory=self.working_directory)
         input_writer.write_chk()
         input_writer.write_pars()
@@ -614,9 +630,16 @@ class Yaff(AtomisticGenericJob):
             elif ref=='mean':
                 ys -= np.mean(ys)
 
-    def log(self):
-        with open(posixpath.join(self.working_directory, 'yaff.log')) as f:
-            print(f.read())
+    def log(self, lammps=False):
+        if lammps:
+            # Mostly for debugging purposes
+            assert self.input['use_lammps']
+            assert self.input['log_lammps'] is not None
+            with open(posixpath.join(self.working_directory, self.input['log_lammps'])) as f:
+                print(f.read())
+        else:
+            with open(posixpath.join(self.working_directory, 'yaff.log')) as f:
+                print(f.read())
 
     def get_yaff_system(self, snapshot=0):
         numbers = self.structure.get_atomic_numbers()
@@ -642,7 +665,7 @@ class Yaff(AtomisticGenericJob):
             raise IOError('No pars.txt file find in job working directory. Have you already run the job?')
         ff = ForceField.generate(
             system, fn_pars, rcut=self.input['rcut'], alpha_scale=self.input['alpha_scale'],
-            gcut_scale=self.input['gcut_scale'], smooth_ei=self.input['smooth_ei']
+            gcut_scale=self.input['gcut_scale'], smooth_ei=self.input['smooth_ei'], tailcorrections=self.input['tailcorrections']
         )
         return ff
 
