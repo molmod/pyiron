@@ -59,13 +59,13 @@ class InputWriter(object):
     from molmod.units import *
     from yaff import *
     import h5py, numpy as np
-    """) +'\n'
+    """) +'\n\n'
 
 
     common_input = inspect.cleandoc("""#Setting up system and force field
     system = System.from_file('system.chk')
     ff = ForceField.generate(system, 'pars.txt', rcut={rcut}*angstrom, alpha_scale={alpha_scale}, gcut_scale={gcut_scale}, smooth_ei={smooth_ei}, tailcorrections={tailcorrections})
-    """) +'\n'
+    """) +'\n\n'
 
     common_output = inspect.cleandoc("""
     #Setting up output
@@ -89,7 +89,7 @@ class InputWriter(object):
     from yaff import log
     log.set_level(log.silent)
     if rank==0: log.set_level(log.medium)
-    """) + '\n'
+    """) + '\n\n'
 
     common_lammps_input = inspect.cleandoc("""
     fn_sys = 'system.dat' # LAMMPS System file
@@ -97,12 +97,11 @@ class InputWriter(object):
 
     # Tabulate the non-bonded interactions
     # Bonded interactions remain calculated by Yaff
-    ff_lammps = swap_noncovalent_lammps(ff, fn_system = fn_sys, fn_log={fn_log}
-                fn_table = fn_table, comm = comm)
+    ff_lammps = swap_noncovalent_lammps(ff, fn_system=fn_sys, fn_log="{fn_log}", fn_table=fn_table, comm=comm)
 
     # Perform small sanity check for LAMMPS vs Yaff
-    gpos, vtens = np.zeros((sys.natom, 3)), np.zeros((3, 3))
-    gpos_lammps, vtens_lammps = np.zeros((sys.natom, 3)), np.zeros((3, 3))
+    gpos, vtens = np.zeros((system.natom, 3)), np.zeros((3, 3))
+    gpos_lammps, vtens_lammps = np.zeros((system.natom, 3)), np.zeros((3, 3))
     e = ff.compute(gpos, vtens)
     e_lammps = ff_lammps.compute(gpos_lammps, vtens_lammps)
     p = np.trace(vtens)/3.0/ff.system.cell.volume
@@ -112,15 +111,16 @@ class InputWriter(object):
 
     # Replace ff variable reference to lammps
     ff = ff_lammps
-    """) + '\n'
+    """) + '\n\n'
 
     common_lammps_output = inspect.cleandoc("""
+    # Setting up LAMMPS output
     if rank==0:
         f = h5py.File('output.h5', mode='w')
         hdf5 = HDF5Writer(f, step={h5step})
         r = h5py.File('restart.h5', mode='w')
         restart = RestartWriter(r, step=10000)
-        hooks = [hdf,hdf_restart] # integrator hooks will be appended to this list
+        hooks = [hdf5,restart] # integrator hooks will be appended to this list
     else:
         hooks = [] # integrator hooks will be appended to this list
 
@@ -228,7 +228,7 @@ class InputWriter(object):
             tailcorrections=self.input_dict['tailcorrections'],
         )
         if self.input_dict['use_lammps']:
-            body += InputWriter.common_lammps_input.format(self.input_dict['log_lammps'])
+            body += InputWriter.common_lammps_input.format(fn_log=self.input_dict['log_lammps'])
 
         if self.input_dict['use_lammps']:
             body += InputWriter.common_lammps_output.format(h5step=1,)
@@ -236,11 +236,11 @@ class InputWriter(object):
             body += InputWriter.common_output.format(h5step=1,)
 
         # Specific jobtype lines
-        body += "dof = CartesianDOF(ff, gpos_rms={gpos_rms}, dpos_rms={dpos_rms})".format(
+        body += "dof = CartesianDOF(ff, gpos_rms={gpos_rms}, dpos_rms={dpos_rms})\n".format(
             gpos_rms=self.input_dict['gpos_rms'],dpos_rms=self.input_dict['dpos_rms']
         )
         body += inspect.cleandoc("""
-        opt = CGOptimizer(dof, hooks=[hdf5])
+        opt = CGOptimizer(dof, hooks=hooks)
         opt.run({nsteps})
         system.to_file('opt.chk')
         """.format(nsteps=self.input_dict['nsteps']))
@@ -259,7 +259,7 @@ class InputWriter(object):
             tailcorrections=self.input_dict['tailcorrections'],
         )
         if self.input_dict['use_lammps']:
-            body += InputWriter.common_lammps_input.format(self.input_dict['log_lammps'])
+            body += InputWriter.common_lammps_input.format(fn_log=self.input_dict['log_lammps'])
 
         if self.input_dict['use_lammps']:
             body += InputWriter.common_lammps_output.format(h5step=1,)
@@ -267,12 +267,12 @@ class InputWriter(object):
             body += InputWriter.common_output.format(h5step=1,)
 
         # Specific jobtype lines
-        body += "dof = StrainCellDOF(ff, gpos_rms={gpos_rms}, dpos_rms={dpos_rms}, grvecs_rms={grvecs_rms}, drvecs_rms={drvecs_rms}, do_frozen=False)".format(
+        body += "dof = StrainCellDOF(ff, gpos_rms={gpos_rms}, dpos_rms={dpos_rms}, grvecs_rms={grvecs_rms}, drvecs_rms={drvecs_rms}, do_frozen=False)\n".format(
             gpos_rms=self.input_dict['gpos_rms'],dpos_rms=self.input_dict['dpos_rms'],
             grvecs_rms=self.input_dict['grvecs_rms'],drvecs_rms=self.input_dict['drvecs_rms']
         )
         body += inspect.cleandoc("""
-        opt = CGOptimizer(dof, hooks=[hdf5])
+        opt = CGOptimizer(dof, hooks=hooks)
         opt.run({nsteps})
         system.to_file('opt.chk')
         """.format(nsteps=self.input_dict['nsteps']))
@@ -292,7 +292,7 @@ class InputWriter(object):
             tailcorrections=self.input_dict['tailcorrections'],
         )
         if self.input_dict['use_lammps']:
-            body += InputWriter.common_lammps_input.format(self.input_dict['log_lammps'])
+            body += InputWriter.common_lammps_input.format(fn_log=self.input_dict['log_lammps'])
 
         if self.input_dict['use_lammps']:
             body += InputWriter.common_lammps_output.format(h5step=1,)
@@ -320,7 +320,7 @@ class InputWriter(object):
             tailcorrections=self.input_dict['tailcorrections'],
         )
         if self.input_dict['use_lammps']:
-            body += InputWriter.common_lammps_input.format(self.input_dict['log_lammps'])
+            body += InputWriter.common_lammps_input.format(fn_log=self.input_dict['log_lammps'])
 
         if self.input_dict['use_lammps']:
             body += InputWriter.common_lammps_output.format(h5step=1,)
@@ -328,11 +328,11 @@ class InputWriter(object):
             body += InputWriter.common_output.format(h5step=1,)
 
         # Specific jobtype lines
-        body += "dof = CartesianDOF(ff, gpos_rms={gpos_rms}, dpos_rms={dpos_rms})".format(
+        body += "dof = CartesianDOF(ff, gpos_rms={gpos_rms}, dpos_rms={dpos_rms})\n".format(
             gpos_rms=self.input_dict['gpos_rms'],dpos_rms=self.input_dict['dpos_rms']
         )
         body += inspect.cleandoc("""
-        opt = CGOptimizer(dof, hooks=[hdf5])
+        opt = CGOptimizer(dof, hooks=hooks)
         opt.run(0) # just caluculate the energy
         """)
         body+= InputWriter.tail
@@ -350,7 +350,7 @@ class InputWriter(object):
             tailcorrections=self.input_dict['tailcorrections'],
         )
         if self.input_dict['use_lammps']:
-            body += InputWriter.common_lammps_input.format(self.input_dict['log_lammps'])
+            body += InputWriter.common_lammps_input.format(fn_log=self.input_dict['log_lammps'])
 
         if self.input_dict['use_lammps']:
             body += InputWriter.common_lammps_output.format(h5step=1,)
@@ -384,7 +384,7 @@ class InputWriter(object):
             tailcorrections=self.input_dict['tailcorrections'],
         )
         if self.input_dict['use_lammps']:
-            body += InputWriter.common_lammps_input.format(self.input_dict['log_lammps'])
+            body += InputWriter.common_lammps_input.format(fn_log=self.input_dict['log_lammps'])
 
         if self.input_dict['use_lammps']:
             body += InputWriter.common_lammps_output.format(h5step=self.input_dict['h5step'],)
@@ -415,7 +415,7 @@ class InputWriter(object):
             tailcorrections=self.input_dict['tailcorrections'],
         )
         if self.input_dict['use_lammps']:
-            body += InputWriter.common_lammps_input.format(self.input_dict['log_lammps'])
+            body += InputWriter.common_lammps_input.format(fn_log=self.input_dict['log_lammps'])
 
         if self.input_dict['use_lammps']:
             body += InputWriter.common_lammps_output.format(h5step=self.input_dict['h5step'],)
@@ -453,7 +453,7 @@ class InputWriter(object):
             tailcorrections=self.input_dict['tailcorrections'],
         )
         if self.input_dict['use_lammps']:
-            body += InputWriter.common_lammps_input.format(self.input_dict['log_lammps'])
+            body += InputWriter.common_lammps_input.format(fn_log=self.input_dict['log_lammps'])
 
         if self.input_dict['use_lammps']:
             body += InputWriter.common_lammps_output.format(h5step=self.input_dict['h5step'],)
@@ -507,7 +507,7 @@ class InputWriter(object):
             tailcorrections=self.input_dict['tailcorrections'],
         )
         if self.input_dict['use_lammps']:
-            body += InputWriter.common_lammps_input.format(self.input_dict['log_lammps'])
+            body += InputWriter.common_lammps_input.format(fn_log=self.input_dict['log_lammps'])
 
         body += InputWriter.scan_integrator_class
 

@@ -364,7 +364,11 @@ class Yaff(AtomisticGenericJob):
         self.input['ffpars'] = ffpars
 
     def enable_lammps(self):
+        # Sanity check
+        assert self.structure.cell is not None and self.structure.cell.volume > 0
+        assert self.input['jobtype'] in ['nve','nvt','npt'], 'LAMMPS coupling is only implemented for MD simulations'
         self.input['use_lammps'] = True
+
 
     def write_input(self):
         # Check whether there are inconsistencies in the parameter file
