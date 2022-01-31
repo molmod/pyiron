@@ -60,7 +60,6 @@ setup(
         'tqdm>=4.43.0',
         'yaff>=1.4.2',
         'openbabel>=2.4.1',
-        'pint==0.18',
     ],
     cmdclass=versioneer.get_cmdclass(),
 
