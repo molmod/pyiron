@@ -602,6 +602,13 @@ class Project(ProjectPath):
         Returns:
             pandas.Dataframe: Return the result as a pandas.Dataframe object
         """
+        # Check if jobs are still running or crashed on the cluster node.
+        job_ids = self.get_jobs(columns=['id','status'])
+        job_ids = [id for n,id in enumerate(job_ids['id']) if job_ids['status'][n]=='running']
+
+        for job_id in job_ids:
+            self.refresh_job_status_based_on_job_id(job_id)
+
         if not isinstance(self.db, FileTable):
             return job_table(
                 database=self.db,
