@@ -363,12 +363,12 @@ class Yaff(AtomisticGenericJob):
 
         self.input['ffpars'] = ffpars
 
-    def enable_lammps(self):
+    def enable_lammps(self,executable='2019_lammps'):
         # Sanity check
         assert self.structure.cell is not None and self.structure.cell.volume > 0
         assert self.input['jobtype'] in ['nve','nvt','npt'], 'LAMMPS coupling is only implemented for MD simulations'
         self.input['use_lammps'] = True
-
+        self.executable.version = executable # will automatically be updated to mpi version if required
 
     def write_input(self):
         # Check whether there are inconsistencies in the parameter file
@@ -377,7 +377,7 @@ class Yaff(AtomisticGenericJob):
         input_dict = {
             'jobtype': self.input['jobtype'],
             'use_lammps': self.input['use_lammps'],
-            'log_lammps': self.input['log_lammps'],
+            'log_lammps': "'{}'".format(str(self.input['log_lammps'])) if self.input['log_lammps'] else None,
             'symbols': self.structure.get_chemical_symbols(),
             'numbers':self.structure.get_atomic_numbers(),
             'bonds': self.bonds,
@@ -412,14 +412,12 @@ class Yaff(AtomisticGenericJob):
         if self.structure.cell is not None and self.structure.cell.volume > 0:
              input_dict['cell'] = self.structure.get_cell()
 
-        if self.input['use_lammps']:
-            assert self.server.cores > 1, 'When using the LAMMPS coupling, use more than one core!'
-            if not 'mpi' in self.executable.version:
-                self.executable.version = '2019_mpi'
-                print('You did not select a mpi executable. The 2019_mpi version was automatically assigned.')
-        else:
+        if not self.input['use_lammps']:
             assert self.server.cores == 1, 'Yaff only supports a single core!'
-
+        else:
+            if not 'lammps' in self.executable.version:
+                self.executable.version = '2019_lammps' if self.server.cores == 1 else '2019_lammps_mpi'
+                warnings.warn('You did not select a yaff/lammps executable. The {} version was automatically assigned.'.format(self.executable.version))
 
         # Write input files
         input_writer = LAMMPSInputWriter(input_dict,working_directory=self.working_directory) if self.input['use_lammps'] \
@@ -427,6 +425,9 @@ class Yaff(AtomisticGenericJob):
         input_writer.write_chk()
         input_writer.write_pars()
         input_writer.write_jobscript(jobtype=self.input['jobtype'])
+
+        if self.input['use_lammps']:
+            input_writer.write_jobscript(jobtype='table')
         if not self.enhanced is None:
             input_writer.write_plumed()
 
@@ -636,16 +637,13 @@ class Yaff(AtomisticGenericJob):
             elif ref=='mean':
                 ys -= np.mean(ys)
 
-    def log(self, lammps=False):
-        if lammps:
-            # Mostly for debugging purposes
-            assert self.input['use_lammps']
-            assert self.input['log_lammps'] is not None
-            with open(posixpath.join(self.working_directory, self.input['log_lammps'])) as f:
+    def log(self):
+        if self.input['use_lammps']:
+            with open(posixpath.join(self.working_directory, 'table.log')) as f:
                 print(f.read())
-        else:
-            with open(posixpath.join(self.working_directory, 'yaff.log')) as f:
-                print(f.read())
+
+        with open(posixpath.join(self.working_directory, 'yaff.log')) as f:
+            print(f.read())
 
     def get_yaff_system(self, snapshot=0):
         numbers = self.structure.get_atomic_numbers()

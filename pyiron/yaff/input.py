@@ -31,7 +31,7 @@ class YaffInput(GenericParameters):
         tailcorrections True #(FF) correct for neglected interactions by finite rcut, assuming uniform system outside rcut (allows smaller rcut)
         smooth_ei True #(FF) smoothen cutoff for real space electrostatics
         use_lammps False #(FF) uses the LAMMPS code to speed up non-covalent energy contribution calculations
-        log_lammps None #(FF) filename for LAMMPS log, e.g. lammps.log, if None nothing is stored
+        log_lammps False #(FF) filename for LAMMPS log, e.g. lammps.log, if False nothing is stored
         gpos_rms 1e-8 #(OPT) convergence criterion for RMS of gradients towards atomic coordinates
         dpos_rms 1e-6 #(OPT) convergence criterion for RMS of differences of atomic coordinates
         grvecs_rms 1e-8 #(OPT) convergence criterion for RMS of gradients towards cell parameters
@@ -474,8 +474,15 @@ class LAMMPSInputWriter(InputWriter):
 
     # Tabulate the non-bonded interactions
     # Bonded interactions remain calculated by Yaff
-    ff_lammps = swap_noncovalent_lammps(ff, fn_system=fn_sys, fn_log="{fn_log}", fn_table=fn_table, comm=comm)
+    ff_lammps = swap_noncovalent_lammps(ff, fn_system=fn_sys, fn_log={fn_log}, fn_table=fn_table, overwrite_table={overwrite_table}, comm=comm)
 
+    {check}
+
+    # Replace ff variable reference to lammps
+    ff = ff_lammps
+    """) + '\n\n'
+
+    common_lammps_check = inspect.cleandoc("""
     # Perform small sanity check for LAMMPS vs Yaff
     gpos, vtens = np.zeros((system.natom, 3)), np.zeros((3, 3))
     gpos_lammps, vtens_lammps = np.zeros((system.natom, 3)), np.zeros((3, 3))
@@ -485,10 +492,7 @@ class LAMMPSInputWriter(InputWriter):
     p_lammps = np.trace(vtens_lammps)/3.0/ff.system.cell.volume
     print("E(Yaff) = %12.3f E(LAMMPS) = %12.3f deltaE = %12.3e kJ/mol"%(e/kjmol,e_lammps/kjmol,(e_lammps-e)/kjmol))
     print("P(Yaff) = %12.3f P(LAMMPS) = %12.3f deltaP = %12.3e bar"%(p/bar,p_lammps/bar,(p_lammps-p)/bar))
-
-    # Replace ff variable reference to lammps
-    ff = ff_lammps
-    """) + '\n\n'
+    """)
 
     common_lammps_output = inspect.cleandoc("""
     # Setting up LAMMPS output
@@ -512,20 +516,43 @@ class LAMMPSInputWriter(InputWriter):
             self.write_ynvt()
         elif jobtype == 'npt':
             self.write_ynpt()
+        elif jobtype == 'table':
+            self.write_table()
         else:
             raise IOError('Invalid job type for Yaff/LAMMPS job, received %s' %jobtype)
 
-    def write_ynve(self):
+    def write_table(self):
         imp =  LAMMPSInputWriter.common_import
         imp += LAMMPSInputWriter.common_lammps_import
 
-        body += LAMMPSInputWriter.common_input.format(
+        body = LAMMPSInputWriter.common_input.format(
             rcut=self.input_dict['rcut']/angstrom, alpha_scale=self.input_dict['alpha_scale'],
             gcut_scale=self.input_dict['gcut_scale'], smooth_ei=self.input_dict['smooth_ei'],
             tailcorrections=self.input_dict['tailcorrections'],
         )
 
-        body += LAMMPSInputWriter.common_lammps_input.format(fn_log=self.input_dict['log_lammps'])
+        body += LAMMPSInputWriter.common_lammps_input.format(fn_log=self.input_dict['log_lammps'], overwrite_table=True, check=LAMMPSInputWriter.common_lammps_check)
+        body += LAMMPSInputWriter.tail
+
+        # Indent the body
+        body = textwrap.indent(body, 4 * ' ')
+        body = imp + body
+
+        with open(posixpath.join(self.working_directory,'table_script.py'), 'w') as f:
+            f.write(body)
+
+
+    def write_ynve(self):
+        imp =  LAMMPSInputWriter.common_import
+        imp += LAMMPSInputWriter.common_lammps_import
+
+        body = LAMMPSInputWriter.common_input.format(
+            rcut=self.input_dict['rcut']/angstrom, alpha_scale=self.input_dict['alpha_scale'],
+            gcut_scale=self.input_dict['gcut_scale'], smooth_ei=self.input_dict['smooth_ei'],
+            tailcorrections=self.input_dict['tailcorrections'],
+        )
+
+        body += LAMMPSInputWriter.common_lammps_input.format(fn_log=self.input_dict['log_lammps'], overwrite_table=False, check="")
         body += LAMMPSInputWriter.common_lammps_output.format(h5step=self.input_dict['h5step'],)
 
 
@@ -538,7 +565,7 @@ class LAMMPSInputWriter(InputWriter):
         md = VerletIntegrator(ff, {timestep}*femtosecond, hooks=hooks)
         md.run({nsteps})
         """.format(timestep=self.input_dict['timestep']/femtosecond, nsteps=self.input_dict['nsteps']))
-        body+= LAMMPSInputWriter.tail
+        body += LAMMPSInputWriter.tail
 
         # Indent the body
         body = textwrap.indent(body, 4 * ' ')
@@ -556,7 +583,7 @@ class LAMMPSInputWriter(InputWriter):
             gcut_scale=self.input_dict['gcut_scale'], smooth_ei=self.input_dict['smooth_ei'],
             tailcorrections=self.input_dict['tailcorrections'],
         )
-        body += LAMMPSInputWriter.common_lammps_input.format(fn_log=self.input_dict['log_lammps'])
+        body += LAMMPSInputWriter.common_lammps_input.format(fn_log=self.input_dict['log_lammps'], overwrite_table=False, check="")
         body += LAMMPSInputWriter.common_lammps_output.format(h5step=self.input_dict['h5step'],)
 
 
@@ -576,7 +603,7 @@ class LAMMPSInputWriter(InputWriter):
                 temp=self.input_dict['temp']/kelvin,timestep=self.input_dict['timestep']/femtosecond,
                 timecon_thermo=self.input_dict['timecon_thermo']/femtosecond, nsteps=self.input_dict['nsteps']
             ))
-        body+= LAMMPSInputWriter.tail
+        body += LAMMPSInputWriter.tail
 
         # Indent the body
         body = textwrap.indent(body, 4 * ' ')
@@ -594,7 +621,7 @@ class LAMMPSInputWriter(InputWriter):
             gcut_scale=self.input_dict['gcut_scale'], smooth_ei=self.input_dict['smooth_ei'],
             tailcorrections=self.input_dict['tailcorrections'],
         )
-        body += LAMMPSInputWriter.common_lammps_input.format(fn_log=self.input_dict['log_lammps'])
+        body += LAMMPSInputWriter.common_lammps_input.format(fn_log=self.input_dict['log_lammps'], overwrite_table=False, check="")
         body += LAMMPSInputWriter.common_lammps_output.format(h5step=self.input_dict['h5step'],)
 
         if self.input_dict['enhanced'] is not None:
@@ -617,7 +644,7 @@ class LAMMPSInputWriter(InputWriter):
                 press=self.input_dict['press']/bar,timecon_thermo=self.input_dict['timecon_thermo']/femtosecond,
                 timecon_baro=self.input_dict['timecon_baro']/femtosecond, nsteps=self.input_dict['nsteps']
             ))
-        body+= LAMMPSInputWriter.tail
+        body += LAMMPSInputWriter.tail
 
         # Indent the body
         body = textwrap.indent(body, 4 * ' ')
