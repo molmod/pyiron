@@ -377,7 +377,7 @@ class Yaff(AtomisticGenericJob):
         input_dict = {
             'jobtype': self.input['jobtype'],
             'use_lammps': self.input['use_lammps'],
-            'log_lammps': "'{}'".format(str(self.input['log_lammps'])) if self.input['log_lammps'] else None,
+            'log_lammps': self.input['log_lammps'],
             'symbols': self.structure.get_chemical_symbols(),
             'numbers':self.structure.get_atomic_numbers(),
             'bonds': self.bonds,

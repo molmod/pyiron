@@ -31,7 +31,7 @@ class YaffInput(GenericParameters):
         tailcorrections True #(FF) correct for neglected interactions by finite rcut, assuming uniform system outside rcut (allows smaller rcut)
         smooth_ei True #(FF) smoothen cutoff for real space electrostatics
         use_lammps False #(FF) uses the LAMMPS code to speed up non-covalent energy contribution calculations
-        log_lammps False #(FF) filename for LAMMPS log, e.g. lammps.log, if False nothing is stored
+        log_lammps none #(FF) filename for LAMMPS log, e.g. lammps.log, if none, nothing is stored
         gpos_rms 1e-8 #(OPT) convergence criterion for RMS of gradients towards atomic coordinates
         dpos_rms 1e-6 #(OPT) convergence criterion for RMS of differences of atomic coordinates
         grvecs_rms 1e-8 #(OPT) convergence criterion for RMS of gradients towards cell parameters
@@ -474,7 +474,7 @@ class LAMMPSInputWriter(InputWriter):
 
     # Tabulate the non-bonded interactions
     # Bonded interactions remain calculated by Yaff
-    ff_lammps = swap_noncovalent_lammps(ff, fn_system=fn_sys, fn_log={fn_log}, fn_table=fn_table, overwrite_table={overwrite_table}, comm=comm)
+    ff_lammps = swap_noncovalent_lammps(ff, fn_system=fn_sys, fn_log="{fn_log}", fn_table=fn_table, overwrite_table={overwrite_table}, comm=comm)
 
     {check}
 
