@@ -31,7 +31,7 @@ class YaffInput(GenericParameters):
         tailcorrections True #(FF) correct for neglected interactions by finite rcut, assuming uniform system outside rcut (allows smaller rcut)
         smooth_ei True #(FF) smoothen cutoff for real space electrostatics
         use_lammps False #(FF) uses the LAMMPS code to speed up non-covalent energy contribution calculations
-        log_lammps lammps.log #(FF) filename for LAMMPS log, if None nothing is stored
+        log_lammps None #(FF) filename for LAMMPS log, e.g. lammps.log, if None nothing is stored
         gpos_rms 1e-8 #(OPT) convergence criterion for RMS of gradients towards atomic coordinates
         dpos_rms 1e-6 #(OPT) convergence criterion for RMS of differences of atomic coordinates
         grvecs_rms 1e-8 #(OPT) convergence criterion for RMS of gradients towards cell parameters
