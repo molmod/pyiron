@@ -15,7 +15,7 @@ from pyiron.atomistics.structure.atoms import Atoms
 from pyiron.atomistics.job.atomistic import AtomisticGenericJob
 from pyiron.base.settings.generic import Settings
 from pyiron.yaff.storage import ChunkedStorageParser
-from pyiron.yaff.input import YaffInput, InputWriter
+from pyiron.yaff.input import YaffInput, InputWriter, LAMMPSInputWriter
 
 import pyiron.yaff.colvar as colvar
 
@@ -420,8 +420,10 @@ class Yaff(AtomisticGenericJob):
         else:
             assert self.server.cores == 1, 'Yaff only supports a single core!'
 
+
         # Write input files
-        input_writer = InputWriter(input_dict,working_directory=self.working_directory)
+        input_writer = LAMMPSInputWriter(input_dict,working_directory=self.working_directory) if self.input['use_lammps'] \
+                        else InputWriter(input_dict,working_directory=self.working_directory)
         input_writer.write_chk()
         input_writer.write_pars()
         input_writer.write_jobscript(jobtype=self.input['jobtype'])
