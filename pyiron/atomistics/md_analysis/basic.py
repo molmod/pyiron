@@ -11,8 +11,28 @@ from matplotlib.ticker import MaxNLocator
 from molmod.units import *
 from molmod.constants import *
 
+def get_slice(array, start=0, end=-1, max_sample=None, step=None):
+    dimensions = job['output/generic/positions'].shape
+    nrow = dimensions[0] if len(dimensions)==3 else 1
+    if end < 0:
+        end = nrow + end + 1
+    else:
+        end = min(end, nrow)
+    if start < 0:
+        start = nrow + start + 1
 
-def plot_temp_dist(job,temp=None,ndof=None):
+    if step is None:
+        if max_sample is None:
+            return start, end, 1
+        else:
+            assert end>0
+            step = max(1, (end - start)//max_sample + 1)
+
+    return start, end, step
+
+
+
+def plot_temp_dist(job,temp=None,ndof=None,**kwargs):
     """Plots the distribution of the weighted atomic velocities
 
        **Arguments:**
@@ -30,6 +50,24 @@ def plot_temp_dist(job,temp=None,ndof=None):
             The number of degrees of freedom. If not specified, this is chosen
             to be 3*(number of atoms)
 
+        ***Optional***
+
+         start
+              The first sample to be considered for analysis. This may be negative
+              to indicate that the analysis should start from the -start last
+              samples.
+
+         end
+              The last sample to be considered for analysis. This may be negative
+              to indicate that the last -end sample should not be considered.
+
+         max_sample
+              When given, step is set such that the number of samples does not
+              exceed max_sample.
+
+         step
+              The spacing between the samples used for the analysis
+
        This type of plot is essential for checking the sanity of a simulation.
        The empirical cumulative distribution is plotted and overlayed with the
        analytical cumulative distribution one would expect if the data were
@@ -43,8 +81,11 @@ def plot_temp_dist(job,temp=None,ndof=None):
     structure = job.get_structure(-1)
     weights = np.array(np.array(structure.get_masses())*amu)/boltzmann
 
+    # Load optional arguments
+    start, end, step = get_slice(job, **kwargs)
+
     # Load the temperatures from the output file
-    temps = job['output/generic/temperature']
+    temps = job['output/generic/temperature'][start:stop:end]
     if temp is None:
         temp = temps.mean()
 
