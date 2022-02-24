@@ -13,7 +13,7 @@ from quickff.tools import set_ffatypes
 
 from pyiron.atomistics.structure.atoms import Atoms
 from pyiron.atomistics.job.atomistic import AtomisticGenericJob
-from pyiron.base.settings.generic import Settings
+from pyiron.base.settings.generic import settings
 from pyiron.yaff.storage import ChunkedStorageParser
 from pyiron.yaff.input import YaffInput, InputWriter, LAMMPSInputWriter
 
@@ -21,7 +21,7 @@ import pyiron.yaff.colvar as colvar
 
 
 
-s = Settings()
+s = settings
 
 def get_plumed_path():
     for resource_path in s.resource_paths:

@@ -67,13 +67,22 @@ class InputWriter(object):
     ff = ForceField.generate(system, 'pars.txt', rcut={rcut}*angstrom, alpha_scale={alpha_scale}, gcut_scale={gcut_scale}, smooth_ei={smooth_ei}, tailcorrections={tailcorrections})
     """) +'\n\n'
 
-    common_output = inspect.cleandoc("""
+    common_output_md = inspect.cleandoc("""
     #Setting up output
     f = h5py.File('output.h5', mode='w')
     hdf5 = HDF5Writer(f, step={h5step})
     r = h5py.File('restart.h5', mode='w')
     restart = RestartWriter(r, step=10000)
     hooks = [hdf5, restart]
+
+    #Setting up simulation
+    """) + '\n'
+
+    common_output_static = inspect.cleandoc("""
+    #Setting up output
+    f = h5py.File('output.h5', mode='w')
+    hdf5 = HDF5Writer(f, step={h5step})
+    hooks = [hdf5]
 
     #Setting up simulation
     """) + '\n'
@@ -175,7 +184,7 @@ class InputWriter(object):
             gcut_scale=self.input_dict['gcut_scale'], smooth_ei=self.input_dict['smooth_ei'],
             tailcorrections=self.input_dict['tailcorrections'],
         )
-        body += InputWriter.common_output.format(h5step=1,)
+        body += InputWriter.common_output_static.format(h5step=1,)
 
         # Specific jobtype lines
         body += "dof = CartesianDOF(ff, gpos_rms={gpos_rms}, dpos_rms={dpos_rms})\n".format(
@@ -197,7 +206,7 @@ class InputWriter(object):
             gcut_scale=self.input_dict['gcut_scale'], smooth_ei=self.input_dict['smooth_ei'],
             tailcorrections=self.input_dict['tailcorrections'],
         )
-        body += InputWriter.common_output.format(h5step=1,)
+        body += InputWriter.common_output_static.format(h5step=1,)
 
         # Specific jobtype lines
         body += "dof = StrainCellDOF(ff, gpos_rms={gpos_rms}, dpos_rms={dpos_rms}, grvecs_rms={grvecs_rms}, drvecs_rms={drvecs_rms}, do_frozen=False)\n".format(
@@ -221,7 +230,7 @@ class InputWriter(object):
             gcut_scale=self.input_dict['gcut_scale'], smooth_ei=self.input_dict['smooth_ei'],
             tailcorrections=self.input_dict['tailcorrections'],
         )
-        body += InputWriter.common_output.format(h5step=1,)
+        body += InputWriter.common_output_static.format(h5step=1,)
 
         # Specific jobtype lines
         body += inspect.cleandoc("""
@@ -240,7 +249,7 @@ class InputWriter(object):
             gcut_scale=self.input_dict['gcut_scale'], smooth_ei=self.input_dict['smooth_ei'],
             tailcorrections=self.input_dict['tailcorrections'],
         )
-        body += InputWriter.common_output.format(h5step=1,)
+        body += InputWriter.common_output_static.format(h5step=1,)
 
         # Specific jobtype lines
         body += "dof = CartesianDOF(ff, gpos_rms={gpos_rms}, dpos_rms={dpos_rms})\n".format(
@@ -261,7 +270,7 @@ class InputWriter(object):
             gcut_scale=self.input_dict['gcut_scale'], smooth_ei=self.input_dict['smooth_ei'],
             tailcorrections=self.input_dict['tailcorrections'],
         )
-        body += InputWriter.common_output.format(h5step=1,)
+        body += InputWriter.common_output_static.format(h5step=1,)
 
         # Specific jobtype lines
         body +=inspect.cleandoc("""dof = CartesianDOF(ff)
@@ -286,7 +295,7 @@ class InputWriter(object):
             gcut_scale=self.input_dict['gcut_scale'], smooth_ei=self.input_dict['smooth_ei'],
             tailcorrections=self.input_dict['tailcorrections'],
         )
-        body += InputWriter.common_output.format(h5step=self.input_dict['h5step'],)
+        body += InputWriter.common_output_md.format(h5step=self.input_dict['h5step'],)
 
         if self.input_dict['enhanced'] is not None:
             body += InputWriter.plumed_part
@@ -308,7 +317,7 @@ class InputWriter(object):
             gcut_scale=self.input_dict['gcut_scale'], smooth_ei=self.input_dict['smooth_ei'],
             tailcorrections=self.input_dict['tailcorrections'],
         )
-        body += InputWriter.common_output.format(h5step=self.input_dict['h5step'],)
+        body += InputWriter.common_output_md.format(h5step=self.input_dict['h5step'],)
 
         if self.input_dict['enhanced'] is not None:
             body += InputWriter.plumed_part
@@ -337,7 +346,7 @@ class InputWriter(object):
             gcut_scale=self.input_dict['gcut_scale'], smooth_ei=self.input_dict['smooth_ei'],
             tailcorrections=self.input_dict['tailcorrections'],
         )
-        body += InputWriter.common_output.format(h5step=self.input_dict['h5step'],)
+        body += InputWriter.common_output_md.format(h5step=self.input_dict['h5step'],)
 
         if self.input_dict['enhanced'] is not None:
             body += InputWriter.plumed_part
@@ -384,7 +393,7 @@ class InputWriter(object):
         )
 
         body += InputWriter.scan_integrator_class
-        body += InputWriter.common_output.format(h5step=1,)
+        body += InputWriter.common_output_static.format(h5step=1,)
 
         # Specific jobtype lines
         body += inspect.cleandoc("""
