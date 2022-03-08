@@ -35,6 +35,7 @@ JOB_CLASS_DICT = {
     "FlexibleMaster": "pyiron.base.master.flexible",
     "Gaussian": "pyiron.gaussian.gaussian",
     "GpawJob": "pyiron.gpaw.gpaw",
+    "GPXRD": "pyiron.gpxrd.gpxrd",
     "HessianJob": "pyiron.thermodynamics.hessian",
     "Horton": "pyiron.horton.horton",
     "Lammps": "pyiron.lammps.lammps",

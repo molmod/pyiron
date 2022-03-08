@@ -109,7 +109,7 @@ class Project(ProjectCore):
                                              ‘ConvergenceEncutParallel’, ‘ConvergenceKpointParallel’, ’PhonopyMaster’,
                                              ‘DefectFormationEnergy’, ‘LammpsASE’, ‘PipelineMaster’,
                                              ’TransformationPath’, ‘ThermoIntEamQh’, ‘ThermoIntDftEam’, ‘ScriptJob’,
-                                             ‘ListMaster’, ‘Gaussian’, ‘Yaff’, ‘US’, ‘Horton’, ‘QChem’, Raspa,]
+                                             ‘ListMaster’, ‘Gaussian’, ‘Yaff’, ‘US’, ‘Horton’, ‘QChem’, ‘Raspa’, ‘GPXRD’]
     """
 
     def __init__(self, path="", user=None, sql_query=None, default_working_directory=False):
@@ -164,6 +164,7 @@ class Project(ProjectCore):
         - ‘Horton’:
         - ‘QChem’:
         - ‘Raspa’:
+        - ‘GPXRD’:
 
         Args:
             job_type (str): job type can be ['StructureContainer’, ‘StructurePipeline’, ‘AtomisticExampleJob’,
@@ -174,7 +175,7 @@ class Project(ProjectCore):
                                              ‘ConvergenceEncutParallel’, ‘ConvergenceKpointParallel’, ’PhonopyMaster’,
                                              ‘DefectFormationEnergy’, ‘LammpsASE’, ‘PipelineMaster’,
                                              ’TransformationPath’, ‘ThermoIntEamQh’, ‘ThermoIntDftEam’, ‘ScriptJob’,
-                                             ‘ListMaster’, ‘Gaussian’, ‘Yaff’, ‘US’, ‘Horton’, ‘QChem’, ‘Raspa’]
+                                             ‘ListMaster’, ‘Gaussian’, ‘Yaff’, ‘US’, ‘Horton’, ‘QChem’, ‘Raspa’, ‘GPXRD’]
             job_name (str): name of the job
 
         Returns:
