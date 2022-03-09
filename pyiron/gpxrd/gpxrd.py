@@ -183,20 +183,26 @@ class GPXRD(AtomisticGenericJob):
         return stat_res
 
     @staticmethod
-    def remove_background(observed,locs,range,bkg_points=10,uniform=True,plot=False,fname=None):
+    def remove_background(reference,locs=None,bkg_range=None,bkg_points=10,uniform=True,plot=False,fname=None,skiprows=0):
         """
             Remove the background the provided reference pattern
 
             ***Args***
-
+            reference
+                file name of reference data (file with two columns, no header)
+                or a 2D array with (ttheta,intensity) in units [deg, a.u.]
+            skiprows
+                number of rows to skip in reading file (when reference is a filename)
             locs
-                node locations in degrees
-            range
-                range for background points
+                node locations in degrees, default linspace in range with bkg_points
+            bkg_range
+                range for background points, default full ttheta range of reference pattern
             bkg_points
                 set number of background points in fit
             uniform
                 if false, the grid points are locally optimized towards the minima for a better interpolation
+            plot
+                plot the analysis and difference plot
             fname
                 file location for the plot
 
@@ -212,14 +218,14 @@ class GPXRD(AtomisticGenericJob):
 
         pp = pyobjcryst.powderpattern.PowderPattern()
 
-        # Add the observed data
-        if isinstance(observed,string) and os.path.exists(observed):
-            pp.ImportPowderPattern2ThetaObs(self.input['obspattern'],0) # skip no lines
-        elif isinstance(observed,np.ndarray):
-            pp.SetPowderPatternX(observed[:,0])
-            pp.SetPowderPatternObs(observed[:,1])
+        # Add the reference data
+        if isinstance(reference,str) and os.path.exists(reference):
+            pp.ImportPowderPattern2ThetaObs(reference,skiprows) # skip no lines
+        elif isinstance(reference,np.ndarray):
+            pp.SetPowderPatternX(reference[:,0]*deg)
+            pp.SetPowderPatternObs(reference[:,1])
         ttheta = pp.GetPowderPatternX()/deg
-        observed = pp.GetPowderPatternObs()
+        reference = pp.GetPowderPatternObs()
 
         # Background
         if locs is not None:
@@ -231,18 +237,18 @@ class GPXRD(AtomisticGenericJob):
             else:
                 bx=np.linspace(ttheta.min(),ttheta.max(),bkg_points)
             if not uniform:
-                # adapt bx to minima of observed pattern in each neighbourhood (optional)
+                # adapt bx to minima of reference pattern in each neighbourhood (optional)
                 idx = [np.argmin(np.abs(ttheta-bxi)) for bxi in bx]
                 step = (idx[1] - idx[0])//4
                 for n in range(len(bx)):
                     mn = -step if idx[n]>step else 0
                     mx = step if n<(len(idx)-1) else 0
-                    bx[n] = ttheta[idx[n]+ mn + np.argmin(observed[idx[n]+mn:idx[n]+mx])]
+                    bx[n] = ttheta[idx[n]+ mn + np.argmin(reference[idx[n]+mn:idx[n]+mx])]
 
+        bx*=deg
         by=np.zeros(bx.shape)
         b=pp.AddPowderPatternBackground()
         b.SetInterpPoints(bx,by)
-        b.Print()
         b.UnFixAllPar()
         b.OptimizeBayesianBackground()
 
@@ -252,14 +258,13 @@ class GPXRD(AtomisticGenericJob):
         # Plot the difference
         if plot:
             # Consider the difference for the delta plot
-            height = p2.max()-p2.min()
-            diff = p2-p1
+            height = no_bg.max()-no_bg.min()
 
             fig = pt.figure()
             ax1 = pt.gca()
             ax1.plot(ttheta,pp.GetPowderPatternCalc(),lw=1,label='background')
-            ax1.plot(ttheta,observed - observed.min(),lw=1,label='observed')
-            ax1.plot(ttheta,diff-height*0.1,color='g',lw=1,label=r'$\Delta$')
+            ax1.plot(ttheta,reference - reference.min(),lw=1,label='reference')
+            ax1.plot(ttheta,no_bg-height*0.1,color='g',lw=1,label=r'$\Delta$')
             ax1.set_xlabel('2θ (°)')
             ax1.set_ylabel('Intensity (a.u.)')
 
@@ -269,7 +274,7 @@ class GPXRD(AtomisticGenericJob):
             ax1.set_xlim(lims)
 
             lims = pt.ylim()
-            ax1.vlines(vlines/deg,lims[0],lims[1],lw=0.1)
+            ax1.vlines(bx/deg,lims[0],lims[1],lw=0.1)
 
             ax1.tick_params(
                 axis='y',          # changes apply to the y-axis

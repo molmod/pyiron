@@ -553,3 +553,7 @@ def convert_path(path):
         return Path(path).expanduser().resolve().absolute().as_posix()
     else:
         return os.path.abspath(os.path.normpath(os.path.expanduser(path))).replace('\\', '/')
+
+
+# Define general settings object which will be shared by all
+settings = Settings()
