@@ -59,7 +59,7 @@ setup(
         'tamkin>=1.2.6',
         'tqdm>=4.43.0',
         'yaff>=1.4.2',
-        'openbabel>=2.4.1',
+        #'openbabel>=3.1.1',
     ],
     cmdclass=versioneer.get_cmdclass(),
 
