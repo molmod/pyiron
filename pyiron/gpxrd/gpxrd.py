@@ -454,7 +454,7 @@ class GPXRD(AtomisticGenericJob):
             start = positions.shape[0] + start + 1
 
         if num_frames is None:
-            num_frames = start-stop
+            num_frames = stop-start
 
         self.input['num_frames'] = num_frames
         frames = np.linspace(start,stop,num_frames,dtype=int,endpoint=False)
@@ -482,7 +482,7 @@ class GPXRD(AtomisticGenericJob):
             start = len(cif_files) + start + 1
 
         if num_frames is None:
-            num_frames = start-stop
+            num_frames = stop-start
 
         self.input['num_frames'] = num_frames
         frames = np.linspace(start,stop,num_frames,dtype=int,endpoint=False)
@@ -517,7 +517,7 @@ class GPXRD(AtomisticGenericJob):
             start = len(structures) + start + 1
 
         if num_frames is None:
-            num_frames = start-stop
+            num_frames = stop-start
 
         self.input['num_frames'] = num_frames
         frames = np.linspace(start,stop,num_frames,dtype=int,endpoint=False)
@@ -558,7 +558,7 @@ class GPXRD(AtomisticGenericJob):
             start = positions.shape[0] + start + 1
 
         if num_frames is None:
-            num_frames = start-stop
+            num_frames = stop-start
 
         self.input['num_frames'] = num_frames
         frames = np.linspace(start,stop,num_frames,dtype=int,endpoint=False)
