@@ -81,17 +81,17 @@ class InputWriter():
 
 
     common_frame_calc = inspect.cleandoc("""
-    def calculate_frame(input_name,output_name,obspattern,full_pattern,wavelength,rad_type,max2theta,numpoints,peakwidth,save_fhkl,detail_fhkl):
+    def calculate_frame(input_name,output_name,refpattern,skiprows,full_pattern,wavelength,rad_type,max2theta,numpoints,peakwidth,save_fhkl,detail_fhkl):
         c = CreateCrystalFromCIF(input_name)
 
         px = PowderPattern()
         px.SetWavelength(wavelength)
         px.SetRadiationType(rad_type)
 
-        if obspattern is None:
+        if refpattern is None:
             px.SetPowderPatternX(np.linspace(0, max2theta*deg, numpoints))
         else:
-            px.ImportPowderPattern2ThetaObs(obspattern,0) # skip no lines
+            px.ImportPowderPattern2ThetaObs(refpattern,skiprows) # skip no lines
             if full_pattern:
                 # use an identical range as the reference pattern, but with minimum of 0
                 ttheta = px.GetPowderPatternX()
@@ -138,9 +138,8 @@ class InputWriter():
         # Calculate the frame
         fname_in = sys.argv[1]
         fname_out = 'output'
-        calculate_frame(input_name=fname_in,
-                        output_name=fname_out,
-                        obspattern={obspattern},full_pattern={full_pattern},wavelength={wavelength},rad_type=RadiationType.RAD_{rad_type},
+        calculate_frame(input_name=fname_in, output_name=fname_out, refpattern={refpattern},skiprows={skiprows},
+                        full_pattern={full_pattern},wavelength={wavelength},rad_type=RadiationType.RAD_{rad_type},
                         max2theta={max2theta},numpoints={numpoints},peakwidth={peakwidth},save_fhkl={save_fhkl},detail_fhkl={detail_fhkl}
                     )
     """) +'\n\n'
@@ -151,9 +150,8 @@ class InputWriter():
         frame_nr = int(sys.argv[1])
         fname_in = posixpath.join('cifs', '{{}}.cif'.format(frame_nr))
         fname_out = posixpath.join('frames', '{{}}'.format(frame_nr))
-        calculate_frame(input_name=fname_in,
-                        output_name=fname_out,
-                        obspattern={obspattern},full_pattern={full_pattern},wavelength={wavelength},rad_type=RadiationType.RAD_{rad_type},
+        calculate_frame(input_name=fname_in,output_name=fname_out,refpattern={refpattern},skiprows={skiprows},
+                        full_pattern={full_pattern},wavelength={wavelength},rad_type=RadiationType.RAD_{rad_type},
                         max2theta={max2theta},numpoints={numpoints},peakwidth={peakwidth},save_fhkl={save_fhkl},detail_fhkl={detail_fhkl}
                     )
     """) +'\n\n'
@@ -163,7 +161,6 @@ class InputWriter():
         self.input_dict = input_dict
         self.working_directory = working_directory
 
-
     def write_calcscript(self):
         if self.input_dict['jobtype'] == 'static':
             self.write_static_calcscript()
@@ -172,14 +169,14 @@ class InputWriter():
         else:
             raise ValueError
 
-
     def write_static_calcscript(self):
         # This assume only a single cif file was provided
         body  = InputWriter.common_import
         body += InputWriter.common_utils
         body += InputWriter.common_frame_calc
         body += InputWriter.input_static.format(
-                            obspattern="'{}'".format("ref.tsv") if self.input_dict['obspattern'] is not None else None,
+                            refpattern="'{}'".format("ref.tsv") if self.input_dict['refpattern'] is not None else None,
+                            skiprows=self.input_dict['skiprows'] if self.input_dict['skiprows'] is not None else 0,
                             full_pattern=self.input_dict['full_pattern'],wavelength=self.input_dict['wavelength'],
                             rad_type=self.input_dict['rad_type'].upper(),max2theta=self.input_dict['max2theta'],
                             numpoints=self.input_dict['numpoints'],peakwidth=self.input_dict['peakwidth'],
@@ -195,7 +192,8 @@ class InputWriter():
         body += InputWriter.common_utils
         body += InputWriter.common_frame_calc
         body += InputWriter.input_dynamic.format(
-                            obspattern="'{}'".format("ref.tsv") if self.input_dict['obspattern'] is not None else None,
+                            refpattern="'{}'".format("ref.tsv") if self.input_dict['refpattern'] is not None else None,
+                            skiprows=self.input_dict['skiprows'] if self.input_dict['skiprows'] is not None else 0,
                             full_pattern=self.input_dict['full_pattern'],wavelength=self.input_dict['wavelength'],
                             rad_type=self.input_dict['rad_type'].upper(),max2theta=self.input_dict['max2theta'],
                             numpoints=self.input_dict['numpoints'],peakwidth=self.input_dict['peakwidth'],
@@ -213,11 +211,6 @@ class InputWriter():
             self.write_dynamic_jobscript()
         else:
             raise ValueError
-
-        # if there is a reference pattern, copy it to the working directory
-        if self.input_dict['obspattern'] is not None:
-            import shutil
-            shutil.copyfile(self.input_dict['obspattern'], posixpath.join(self.working_directory,'ref.tsv'))
 
         # make the runscript executable, change permissions (equal to chmod +x)
         run_script = posixpath.join(self.working_directory,'run.sh')

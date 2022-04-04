@@ -4,7 +4,7 @@
 
 import pandas
 import time
-from pyiron.base.settings.generic import Settings
+from pyiron.base.settings.generic import settings
 from pyiron.base.generic.util import static_isinstance
 
 """
@@ -24,7 +24,7 @@ __date__ = "Sep 1, 2017"
 
 QUEUE_SCRIPT_PREFIX = "pi_"
 
-s = Settings()
+s = settings
 
 
 def queue_table(job_ids=[], project_only=True, full_table=False):
@@ -122,17 +122,17 @@ def queue_delete_job(item):
         return None
 
 
-def queue_enable_reservation(reservation_id):
+def queue_enable_reservation(item):
     """
-    Enable a reservation for a particular project within the queuing system
+    Enable a reservation for a particular job within the queuing system
     Args:
-        reservation_id (str): Provide the reservation tag
-
+        item (int, pyiron_base.job.generic.GenericJob): Provide either the job_ID or the full hamiltonian
     Returns:
         str: Output from the queuing system as string - optimized for the Sun grid engine
     """
+    que_id = _validate_que_request(item)
     if s.queue_adapter is not None:
-        return s.queue_adapter.enable_reservation(reservation_id)
+        return s.queue_adapter.enable_reservation(process_id=que_id)
     else:
         return None
 

@@ -18,7 +18,7 @@ except ImportError:
 
 from pyiron.base.project.path import ProjectPath
 from pyiron.base.database.filetable import FileTable
-from pyiron.base.settings.generic import Settings
+from pyiron.base.settings.generic import settings
 from pyiron.base.database.jobtable import (
     get_db_columns,
     get_job_ids,
@@ -58,7 +58,7 @@ __email__ = "janssen@mpie.de"
 __status__ = "production"
 __date__ = "Sep 1, 2017"
 
-s = Settings()
+s = settings
 
 
 class Project(ProjectPath):
@@ -1245,17 +1245,15 @@ class Project(ProjectPath):
         return queue_is_empty()
 
     @staticmethod
-    def queue_enable_reservation(reservation_id):
+    def queue_enable_reservation(item):
         """
-        Enable a reservation for a particular project within the queuing system
-
+        Enable a reservation for a particular job within the queuing system
         Args:
-            reservation_id (str): Provide the reservation tag
-
+            item (int, GenericJob): Provide either the job_ID or the full hamiltonian
         Returns:
             str: Output from the queuing system as string - optimized for the Sun grid engine
         """
-        return queue_enable_reservation(reservation_id)
+        return queue_enable_reservation(item)
 
     @staticmethod
     def queue_check_job_is_waiting_or_running(item):

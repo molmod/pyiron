@@ -14,7 +14,7 @@ import posixpath
 import psutil
 import multiprocessing
 from pyiron.base.job.wrapper import JobWrapper
-from pyiron.base.settings.generic import Settings
+from pyiron.base.settings.generic import settings
 from pyiron.base.job.executable import Executable
 from pyiron.base.job.jobstatus import JobStatus
 from pyiron.base.job.core import JobCore
@@ -40,7 +40,7 @@ __email__ = "janssen@mpie.de"
 __status__ = "production"
 __date__ = "Sep 1, 2017"
 
-s = Settings()
+s = settings
 
 intercepted_signals = [
     signal.SIGINT,
@@ -988,6 +988,7 @@ class GenericJob(JobCore):
                 working_directory=self.project_hdf5.working_directory,
                 cores=self.server.cores,
                 gpus=self.server.gpus,
+                reservation_tag=self.server.reservation_tag,
                 run_time_max=self.server.run_time,
                 memory_max=self.server.memory_limit,
                 command=command,

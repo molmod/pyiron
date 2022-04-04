@@ -27,9 +27,49 @@ class GPXRD(AtomisticGenericJob):
         self._executable_activate(enforce=True)
         self.input = GPXRDInput()
 
+    @property
+    def reference_pattern(self):
+        if hasattr(self, '_reference_pattern'):
+            return self._reference_pattern
+        else:
+            print('The reference pattern was not yet assigned.')
+
+    def set_reference_pattern(self, pattern, skiprows=0):
+        """
+            Sets the reference pattern attribute based on a provided 2D array or filename
+            When it is a 2D array, also creates a tsv file and assigns this new tsv file
+            as reference_pattern input dict value if it was not set
+
+            ***Args***
+            pattern
+                2D array (ttheta, intensity) or fname (string)
+            skiprows
+                when providing a filename, skip this number of rows (e.g. header lines)
+                when reading the data
+        """
+        # Small sanity check
+        if skiprows is None:
+            skiprows = 0
+
+        if isinstance(pattern,str):
+            if os.path.exists(pattern):
+                self.input['refpattern'] = pattern
+                self.input['skiprows'] = skiprows
+                self._reference_pattern = np.loadtxt(pattern,skiprows=skiprows)
+            else:
+                raise ValueError('The file does not exist {}'.format(pattern))
+        elif isinstance(pattern,np.ndarray):
+            fname = posixpath.join(self.working_directory,'ref.tsv')
+            self.input['refpattern'] = fname
+            self.input['skiprows'] = 0
+            self._reference_pattern = pattern
+            np.savetxt(fname, pattern, fmt='%.5f', delimiter='\t')
+        else:
+            raise ValueError('Did not receive the correct data type {}, expected str or np.ndarray.'.format(type(pattern)))
+
     def plot(self, scale='optimal', verbose=True, fname=None):
         """
-            Check whether there are significant peaks outside the observed XRD range
+            Check whether there are significant peaks outside the reference XRD range
             Assumes that you have used the full_pattern option
 
             ***Args***
@@ -89,7 +129,7 @@ class GPXRD(AtomisticGenericJob):
 
     def unaccounted_peaks(self,PEAK_FACTOR=3):
         """
-            Check whether there are significant peaks outside the observed XRD range
+            Check whether there are significant peaks outside the reference XRD range
             Assumes that you have used the full_pattern option
 
             ***Args***
@@ -190,7 +230,7 @@ class GPXRD(AtomisticGenericJob):
             ***Args***
             reference
                 file name of reference data (file with two columns, no header)
-                or a 2D array with (ttheta,intensity) in units [deg, a.u.]
+                or a 2D array with (ttheta,intensity)
             skiprows
                 number of rows to skip in reading file (when reference is a filename)
             locs
@@ -352,7 +392,7 @@ class GPXRD(AtomisticGenericJob):
         p1 -= np.min(p1)
         p2 -= np.min(p2)
 
-        if np.sum(np.abs(p2)) == 0: return # this happens for virtual observed pattern
+        if np.sum(np.abs(p2)) == 0: return # this happens for virtual reference pattern
 
         low_p1 = p1[ttheta<=10]
         low_p2 = p2[ttheta<=10]
@@ -575,7 +615,8 @@ class GPXRD(AtomisticGenericJob):
             'peakwidth': self.input['peakwidth'],
             'numpoints': self.input['numpoints'],
             'max2theta': self.input['max2theta'],
-            'obspattern': self.input['obspattern'],
+            'refpattern': self.input['refpattern'],
+            'skiprows': self.input['skiprows'],
             'detail_fhkl': self.input['detail_fhkl'],
             'rad_type': self.input['rad_type'],
             'full_pattern': self.input['full_pattern'],
@@ -592,18 +633,26 @@ class GPXRD(AtomisticGenericJob):
         input_writer.write_calcscript()
         input_writer.write_jobscript()
 
+        # If there is a reference pattern, copy it to the working directory
+        if self.input['refpattern'] is not None:
+            import shutil
+            shutil.copyfile(self.input['refpattern'], posixpath.join(self.working_directory,'ref.tsv'))
+
+            # if this dict value was set directly, still set the property
+            if not hasattr(self, '_reference_pattern'):
+                self.set_reference_pattern(self.input['refpattern'], skiprows=self.input['skiprows'])
+
         # Write structure(s) to cif file(s) for reading
         if self.input['jobtype'] == 'static':
             self.structure.write(posixpath.join(self.working_directory,'input.cif'))
         elif self.input['jobtype'] == 'dynamic':
             # Write structures for each frame
             os.makedirs(posixpath.join(self.working_directory,'cifs'),exist_ok=True)
-            structure = self.structure
+            structure = self.structure.copy()
             for n in range(self.input['num_frames']):
                 structure.positions = self['output/generic/positions'][n]
                 structure.cells = self['output/generic/cells'][n]
-                self.structure.write(posixpath.join(self.working_directory,'cifs','{}.cif'.format(n)))
-
+                structure.write(posixpath.join(self.working_directory,'cifs','{}.cif'.format(n)))
 
     def collect_output(self):
         # Read the relevant tsv files generated by pyobjcryst
@@ -642,13 +691,12 @@ class GPXRD(AtomisticGenericJob):
         else:
             raise ValueError("This jobtype is not supported")
 
-        # Read the observed pattern if it exists
-        if self.input['obspattern'] is not None:
-            ref_data = np.loadtxt(posixpath.join(self.working_directory,'ref.tsv'))
-            output_dict['ttheta_ref'] = ref_data[:,0]
-            output_dict['int_ref'] = ref_data[:,1]
+        # Read the reference pattern if it exists and store it in the output
+        if hasattr(self, '_reference_pattern'):
+            output_dict['ttheta_ref'] = self.reference_pattern[:,0]
+            output_dict['int_ref'] = self.reference_pattern[:,1]
 
-            # if there is an observed pattern, also store the statistical comparison
+            # if there is an reference pattern, also store the statistical comparison
             stat_res = self.compare(np.array([output_dict['ttheta_calc'],output_dict['int_calc']]).T,
                                     np.array([output_dict['ttheta_ref'],output_dict['int_ref']]).T)
 
@@ -670,6 +718,10 @@ class GPXRD(AtomisticGenericJob):
         with self.project_hdf5.open("input") as hdf5_input:
             self.input.from_hdf(hdf5_input)
             self.structure = Atoms().from_hdf(hdf5_input)
+
+            # Also initialise the reference pattern if it exists, use the copied version since we know this file must exist
+            if self.input['refpattern'] is not None:
+                self.set_reference_pattern(posixpath.join(self.working_directory,'ref.tsv'),skiprows=self.input['skiprows'])
 
     def log(self):
         # the log file is likely empty
@@ -693,11 +745,11 @@ def R_Factor(icalc,iobs,weighted=False,abs=False):
 
 def FitScaleFactorForRw(p1,p2,guess,verbose=False):
     """
-        Fit scale factor, while keeping observed experimental pattern p2 fixed as reference
+        Fit scale factor, while keeping reference pattern p2 fixed as reference
     """
     p1 -= np.min(p1)
     p2 -= np.min(p2)
-    if np.sum(np.abs(p2)) == 0: return guess # this happens for virtual observed pattern
+    if np.sum(np.abs(p2)) == 0: return guess # this happens for virtual reference pattern
 
     def error(x,p1,p2):
         #return R_Factor(p1*x[0],p2,abs=True)

@@ -3,10 +3,11 @@
 # Distributed under the terms of "New BSD License", see the LICENSE file.
 
 from collections import OrderedDict
-from pyiron.base.settings.generic import Settings
+from pyiron.base.settings.generic import settings
 from pyiron.base.generic.template import PyironObject
 from pyiron.base.server.runmode import Runmode
 import socket
+import warnings
 
 """
 Server object class which is connected to each job containing the technical details how the job is executed.
@@ -23,7 +24,7 @@ __email__ = "janssen@mpie.de"
 __status__ = "production"
 __date__ = "Sep 1, 2017"
 
-s = Settings()
+s = settings
 
 
 class Server(
@@ -36,6 +37,8 @@ class Server(
         host (str): hostname of the local machine
         queue (str): queue name of the currently selected queue
         cores (int): number of cores
+        gpus (int): number of gpus
+        reservation_tag (str): reservation tag for queue mode
         run_mode (pyiron.base.server.runmode.Runmode): mode of the job ['modal', 'non_modal', 'queue', 'manual']
         new_hdf (bool): create a new HDF5 file [True/False] - default=True
 
@@ -61,6 +64,14 @@ class Server(
 
             the number of cores selected for the current simulation.
 
+        .. attribute:: gpus
+
+            the number of gpus selected for the current simulation.
+
+        .. attribute:: reservation_tag
+
+            the reservation tag selected for the current simulation.
+
         .. attribute:: run_time
 
             the run time in seconds selected for the current simulation.
@@ -75,10 +86,11 @@ class Server(
     """
 
     def __init__(
-        self, host=None, queue=None, cores=1, gpus=None, threads=1, run_mode="modal", new_hdf=True
+        self, host=None, queue=None, cores=1, gpus=None, reservation_tag=None, threads=1, run_mode="modal", new_hdf=True
     ):
         self._cores = cores
         self._gpus = gpus
+        self._reservation_tag = reservation_tag
         self._threads = threads
         self._run_time = None
         self._memory_limit = None
@@ -274,6 +286,32 @@ class Server(
 
         self._gpus = new_gpus
 
+
+    @property
+    def reservation_tag(self):
+        """
+        The reservation tag selected for the current simulation
+
+        Returns:
+            (int): reservation_tag
+        """
+        return self._reservation_tag
+
+    @reservation_tag.setter
+    def reservation_tag(self, new_reservation_tag):
+        """
+        The reservation tag selected for the current simulation
+
+        Args:
+            new_reservation_tag (str): reservation tag
+        """
+        if s.queue_adapter is not None and self._active_queue is not None:
+            warnings.warn("Be sure to use the appropriate cluster for this tag. You can remove the reservation tag by specifying None instead of a string.")
+            s.logger.debug("The reservation tag {} has been added to your job submission command.".format(new_reservation_tag))
+            self._reservation_tag = new_reservation_tag
+        else:
+            self._reservation_tag = new_reservation_tag
+
     @property
     def run_time(self):
         """
@@ -445,6 +483,7 @@ class Server(
         hdf_dict["qid"] = self._queue_id
         hdf_dict["cores"] = self.cores
         hdf_dict["gpus"] = self.gpus
+        hdf_dict["reservation_tag"] = self.reservation_tag
         hdf_dict["threads"] = self.threads
         hdf_dict["new_h5"] = self.new_hdf
         hdf_dict["structure_id"] = self.structure_id
@@ -486,6 +525,8 @@ class Server(
         self._cores = hdf_dict["cores"]
         if "gpus" in hdf_dict.keys():
             self._gpus = hdf_dict["gpus"]
+        if "reservation_tag" in hdf_dict.keys():
+            self._reservation_tag = hdf_dict["reservation_tag"]
         if "run_time" in hdf_dict.keys():
             self._run_time = hdf_dict["run_time"]
         if "memory_limit" in hdf_dict.keys():
@@ -516,6 +557,7 @@ class Server(
         """
         del self._cores
         del self._gpus
+        del self._reservation_tag
         del self._threads
         del self._run_time
         del self._memory_limit

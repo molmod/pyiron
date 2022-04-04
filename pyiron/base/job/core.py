@@ -9,7 +9,7 @@ import posixpath
 import time
 import math
 import stat
-from pyiron.base.settings.generic import Settings
+from pyiron.base.settings.generic import settings
 from pyiron.base.generic.template import PyironObject
 from tables import NoSuchNodeError
 import tarfile
@@ -30,7 +30,7 @@ __email__ = "janssen@mpie.de"
 __status__ = "production"
 __date__ = "Sep 1, 2017"
 
-s = Settings()
+s = settings
 
 
 class JobCore(PyironObject):
