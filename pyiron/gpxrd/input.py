@@ -19,7 +19,7 @@ class GPXRDInput(GenericParameters):
         input_str = """\
 wavelength 1.54056
 peakwidth 0.14
-numpoints 1000
+numpoints 1001
 max2theta 50
 detail_fhkl False
 save_fhkl True
