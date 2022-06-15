@@ -479,7 +479,7 @@ class Yaff(AtomisticGenericJob):
                     hdf5_output[kpath] = getattr(output_parser, k)()
 
         with self.project_hdf5.open("output") as hdf5_output:
-            hdf5_output['generic/indices'] = np.vstack([self.structure.indices] * getattr(output_parser, 'structure_numbers')().shape[0])
+            hdf5_output['generic/indices'] = np.vstack([self.structure.indices] * getattr(output_parser, 'generic_positions')().shape[0])
 
         if self.enhanced is not None:
             # Check if HILLS file exists
