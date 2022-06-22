@@ -452,27 +452,33 @@ class Yaff(AtomisticGenericJob):
                 except TypeError: # in case there is no data
                     continue
 
-                # Initialize dataset
-                with h5py.File(self.project_hdf5.file_name, mode='a') as hdf5_output:
-                    maxshape = (None,) + trajectory_shape[1:]
-                    shape = (0,) + trajectory_shape[1:]
-                    if trajectory_key in hdf5_output: del hdf5_output[trajectory_key]
-                    dset = hdf5_output.create_dataset(trajectory_key, shape, maxshape=maxshape, dtype=trajectory_dtype)
-                    dset.attrs['TITLE'] = 'ndarray' # we need to set this for h5io reading to work
-                    print('\t Created {} dataset, with shape and maxshape '.format(k), shape, maxshape)
+                if len(trajectory_shape)==0: # data which is normally trajectory data, but can be a system attribute as well
+                    with self.project_hdf5.open('output') as hdf5_output:
+                        hdf5_output[kpath] = getattr(output_parser, k)()
 
-                    # Determine slice - assume we can parse data with a size up until 1e7 (arbitrary)
-                    its_per_slice = int(np.ceil(1e7/np.prod(trajectory_shape[1:])))
-                    num_its = int(np.ceil(trajectory_shape[0]/its_per_slice))
-                    print('\t Trajectory length: {}, iterations per slice: {}, number of iterations: {}.'.format(trajectory_shape[0], its_per_slice, num_its, its_per_slice*num_its))
-                    for n in range(num_its):
-                        start = n*its_per_slice
-                        stop = min((n+1)*its_per_slice, trajectory_shape[0])
-                        if dset.shape[0] <= stop:
-                            # do not over-allocate, hdf5 works with chunks internally.
-                            dset.resize(stop, axis=0)
-                        dset[start:stop] = getattr(output_parser, k)(slice=(start,stop))
-                    print('\t Final {} dataset, with shape'.format(k), dset.shape)
+                else:
+                    # Initialize dataset
+                    with h5py.File(self.project_hdf5.file_name, mode='a') as hdf5_output:
+                        maxshape = (None,) + trajectory_shape[1:]
+                        shape = (0,) + trajectory_shape[1:]
+                        if trajectory_key in hdf5_output: del hdf5_output[trajectory_key]
+                        dset = hdf5_output.create_dataset(trajectory_key, shape, maxshape=maxshape, dtype=trajectory_dtype)
+                        dset.attrs['TITLE'] = 'ndarray' # we need to set this for h5io reading to work
+                        print('\t Created {} dataset, with shape and maxshape '.format(k), shape, maxshape)
+
+
+                        # Determine slice - assume we can parse data with a size up until 1e7 (arbitrary)
+                        its_per_slice = int(np.ceil(1e7/np.prod(trajectory_shape[1:])))
+                        num_its = int(np.ceil(trajectory_shape[0]/its_per_slice))
+                        print('\t Trajectory length: {}, iterations per slice: {}, number of iterations: {}.'.format(trajectory_shape[0], its_per_slice, num_its, its_per_slice*num_its))
+                        for n in range(num_its):
+                            start = n*its_per_slice
+                            stop = min((n+1)*its_per_slice, trajectory_shape[0])
+                            if dset.shape[0] <= stop:
+                                # do not over-allocate, hdf5 works with chunks internally.
+                                dset.resize(stop, axis=0)
+                            dset[start:stop] = getattr(output_parser, k)(slice=(start,stop))
+                        print('\t Final {} dataset, with shape'.format(k), dset.shape)
             else:
                 # just dump it
                 with self.project_hdf5.open('output') as hdf5_output:

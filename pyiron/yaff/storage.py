@@ -25,6 +25,7 @@ class ChunkedStorageParser:
         'generic/temperature',
         'generic/pressure',
         'generic/forces',
+        'generic/hessian',
         'generic/velocities',
         'generic/dipole',
         'generic/dipole_velocities',
@@ -39,18 +40,13 @@ class ChunkedStorageParser:
         'generic/epot_contrib_names',
     ]
 
-    hessian_names = [
-        'generic/forces',
-        'generic/hessian',
-    ]
-
     enhanced_names = [
         'enhanced/trajectory/time',
         'enhanced/trajectory/cv',
         'enhanced/trajectory/bias',
     ]
 
-    h5_names = structure_names+trajectory_names+trajectory_attrs_names+hessian_names+enhanced_names
+    h5_names = structure_names+trajectory_names+trajectory_attrs_names+enhanced_names
     function_names = [hn.replace('/','_') for hn in h5_names]
 
     def __init__(self,h5):
@@ -162,6 +158,8 @@ class ChunkedStorageParser:
     def generic_forces(self,slice=None,info=False):
         if 'trajectory' in self.h5.keys() and 'gradient' in self.h5['trajectory'].keys():
             data = -self.h5['trajectory/gradient']
+        elif 'hessian' in self.h5['system'].keys():
+            data = -self.h5['system/gpos'][:]
         else:
             return None
         if info:
@@ -169,6 +167,18 @@ class ChunkedStorageParser:
         if slice is not None:
             return data[slice[0]:slice[1],...]/(electronvolt/angstrom)
         return data[:]/(electronvolt/angstrom)
+
+    def generic_hessian(self,slice=None,info=False):
+        if 'hessian' in self.h5['system'].keys():
+            data = self.h5['system/hessian'][:]
+        else:
+            return None
+        if info:
+            return data.shape, data.dtype
+        if slice is not None:
+            return data[slice[0]:slice[1],...]/(electronvolt/angstrom**2)
+        return data[:]/(electronvolt/angstrom**2)
+
 
     def generic_velocities(self,slice=None,info=False):
         if 'trajectory' in self.h5.keys() and 'vel' in self.h5['trajectory'].keys():
@@ -214,7 +224,8 @@ class ChunkedStorageParser:
             return data.shape, data.dtype
         if slice is not None:
             return data[slice[0]:slice[1],...]/electronvolt
-        return data[:]/electronvolt
+
+        return data[...]/electronvolt # using ... solves issue with possible empty shape
 
     def generic_energy_kin(self,slice=None,info=False):
         if 'trajectory' in self.h5.keys() and 'ekin' in self.h5['trajectory'].keys():
@@ -264,13 +275,7 @@ class ChunkedStorageParser:
         if 'trajectory' in self.h5.keys() and 'epot_contribs' in self.h5['trajectory'].keys():
             return self.h5['trajectory/'].attrs.get('epot_contrib_names')
 
-    #Define Hessian functions
-    def generic_forces(self):
-        if 'hessian' in self.h5['system'].keys():
-            return -self.h5['system/gpos'][:]/(electronvolt/angstrom)
-    def generic_hessian(self):
-        if 'hessian' in self.h5['system'].keys():
-            return self.h5['system/hessian'][:]/(electronvolt/angstrom**2)
+
 
 
     #Define enhanced functions
