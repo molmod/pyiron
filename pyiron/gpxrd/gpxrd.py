@@ -71,7 +71,6 @@ class GPXRD(AtomisticGenericJob):
             self.input['refpattern'] = fname
             self.input['skiprows'] = 0
             self._reference_pattern = pattern
-            np.savetxt(fname, pattern, fmt='%.5f', delimiter='\t')
         else:
             raise ValueError('Did not receive the correct data type {}, expected str or np.ndarray.'.format(type(pattern)))
 
@@ -643,12 +642,12 @@ class GPXRD(AtomisticGenericJob):
 
         # If there is a reference pattern, copy it to the working directory
         if self.input['refpattern'] is not None:
-            import shutil
-            shutil.copyfile(self.input['refpattern'], posixpath.join(self.working_directory,'ref.tsv'))
-
             # if this dict value was set directly, still set the property
             if not hasattr(self, '_reference_pattern'):
                 self.set_reference_pattern(self.input['refpattern'], skiprows=self.input['skiprows'])
+            
+            # write the reference pattern to the working directory, this HAS to be tsv file for libobjcryst
+            np.savetxt(posixpath.join(self.working_directory,'ref.tsv'), self._reference_pattern, fmt='%.5f', delimiter='\t')
 
         # Write structure(s) to cif file(s) for reading
         # First make sure that pbc is True, otherwise the coordinates will not be wrapped
@@ -661,10 +660,11 @@ class GPXRD(AtomisticGenericJob):
         elif self.input['jobtype'] == 'dynamic':
             # Write structures for each frame
             os.makedirs(posixpath.join(self.working_directory,'cifs'),exist_ok=True)
-            structure = self.structure.copy()
             for n in range(self.input['num_frames']):
+                structure = self.structure.copy()
                 structure.positions = self['output/generic/positions'][n]
-                structure.cells = self['output/generic/cells'][n]
+                structure.cell = self['output/generic/cells'][n]
+                structure.indices = self['output/generic/indices'][n]
                 structure.write(posixpath.join(self.working_directory,'cifs','{}.cif'.format(n)))
 
     def collect_output(self):
