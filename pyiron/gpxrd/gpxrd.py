@@ -55,7 +55,15 @@ class GPXRD(AtomisticGenericJob):
             if os.path.exists(pattern):
                 self.input['refpattern'] = pattern
                 self.input['skiprows'] = skiprows
-                self._reference_pattern = np.loadtxt(pattern,skiprows=skiprows)
+                try:
+                    self._reference_pattern = np.loadtxt(pattern,skiprows=skiprows)
+                except ValueError: # this might happen for csv files
+                    import csv
+                    with open(pattern,'r') as reffile:
+                        lines = [reffile.readline() for _ in range(skiprows+1)] # read lines untill the first data line
+                    sniffer = csv.Sniffer()
+                    delimiter = sniffer.sniff(lines[-1])
+                    self._reference_pattern = np.loadtxt(pattern,skiprows=skiprows,delimiter=delimiter.delimiter)
             else:
                 raise ValueError('The file does not exist {}'.format(pattern))
         elif isinstance(pattern,np.ndarray):
@@ -643,6 +651,11 @@ class GPXRD(AtomisticGenericJob):
                 self.set_reference_pattern(self.input['refpattern'], skiprows=self.input['skiprows'])
 
         # Write structure(s) to cif file(s) for reading
+        # First make sure that pbc is True, otherwise the coordinates will not be wrapped
+        if not all(self.structure.pbc):
+            self.structure.pbc = True
+            warnings.warn('The periodic boundary conditions in your structure were not activated. This has been adapted.')
+        
         if self.input['jobtype'] == 'static':
             self.structure.write(posixpath.join(self.working_directory,'input.cif'))
         elif self.input['jobtype'] == 'dynamic':
