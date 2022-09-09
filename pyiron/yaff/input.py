@@ -540,7 +540,7 @@ class LAMMPSInputWriter(InputWriter):
             tailcorrections=self.input_dict['tailcorrections'],
         )
 
-        body += LAMMPSInputWriter.common_lammps_input.format(fn_log=self.input_dict['log_lammps'], overwrite_table=True, check=LAMMPSInputWriter.common_lammps_check)
+        body += LAMMPSInputWriter.common_lammps_input.format(fn_log=self.input_dict['log_lammps'], rmin=self.input_dict['rmin'], overwrite_table=True, check=LAMMPSInputWriter.common_lammps_check)
         body += LAMMPSInputWriter.tail
 
         # Indent the body

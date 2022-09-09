@@ -205,6 +205,7 @@ class Yaff(AtomisticGenericJob):
                 numbers=system.numbers,
                 masses=system.masses/amu,
                 cell=system.cell.rvecs/angstrom,
+                pbc=True, # let pyiron know this is a periodic system
             )
         else:
             self.structure = Atoms(
@@ -363,7 +364,7 @@ class Yaff(AtomisticGenericJob):
 
         self.input['ffpars'] = ffpars
 
-    def enable_lammps(self,executable='2019_lammps'):
+    def enable_lammps(self,executable='2020_lammps'):
         # Sanity check
         assert self.structure.cell is not None and self.structure.cell.volume > 0
         assert self.input['jobtype'] in ['nve','nvt','npt'], 'LAMMPS coupling is only implemented for MD simulations'
@@ -378,6 +379,7 @@ class Yaff(AtomisticGenericJob):
             'jobtype': self.input['jobtype'],
             'use_lammps': self.input['use_lammps'],
             'log_lammps': self.input['log_lammps'],
+            'rmin': self.input['rmin'],
             'symbols': self.structure.get_chemical_symbols(),
             'numbers':self.structure.get_atomic_numbers(),
             'bonds': self.bonds,
