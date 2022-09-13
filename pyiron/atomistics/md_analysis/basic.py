@@ -11,7 +11,7 @@ from matplotlib.ticker import MaxNLocator
 from molmod.units import *
 from molmod.constants import *
 
-def get_slice(array, start=0, end=-1, max_sample=None, step=None):
+def get_slice(job, start=0, end=-1, max_sample=None, step=None):
     dimensions = job['output/generic/positions'].shape
     nrow = dimensions[0] if len(dimensions)==3 else 1
     if end < 0:
@@ -85,7 +85,7 @@ def plot_temp_dist(job,temp=None,ndof=None,**kwargs):
     start, end, step = get_slice(job, **kwargs)
 
     # Load the temperatures from the output file
-    temps = job['output/generic/temperature'][start:stop:end]
+    temps = job['output/generic/temperature'][start:end:step]
     if temp is None:
         temp = temps.mean()
 
