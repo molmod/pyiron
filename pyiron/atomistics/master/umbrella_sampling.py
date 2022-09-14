@@ -447,10 +447,10 @@ class US(AtomisticParallelMaster):
             # Process output of wham code
             data = np.loadtxt(f_fes)
 
-            if len(self.input['cvs']) == 1:
+            if len(self.cvs) == 1:
                 bins = data[:,0]
                 fes = data[:,1]
-            elif len(self.input['cvs']) == 2:
+            elif len(self.cvs) == 2:
                 bins = data[:,0:2]
                 fes = data[:,2]
         else:

@@ -94,7 +94,7 @@ class CV:
         # Some options may need to be adapted, atom indices start from 1 in plumed
         adapted_options = {}
         for k,v in self.options.items():
-            if any([k.startswith(l) for l in ['ATOMS', 'ENTITY',]]):
+            if any([k.startswith(l) for l in ['ATOMS', 'ENTITY','AXIS_ATOMS', 'ATOM']]):
                 # Check type of values to adapt it
                 if isinstance(v,(np.ndarray, list)):
                     # if the values are provided as list, assume it has numbers and strings with auxiliary_cvs names
