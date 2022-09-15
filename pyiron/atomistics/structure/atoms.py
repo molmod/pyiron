@@ -19,7 +19,7 @@ from pyiron.atomistics.structure.periodic_table import (
     PeriodicTable,
     ChemicalElement
 )
-from pyiron.base.settings.generic import Settings
+from pyiron.base.settings.generic import settings
 from scipy.spatial import cKDTree, Voronoi
 import spglib
 
@@ -34,7 +34,7 @@ __email__ = "surendralal@mpie.de"
 __status__ = "production"
 __date__ = "Sep 1, 2017"
 
-s = Settings()
+s = settings
 
 
 class Atoms(ASEAtoms):
@@ -3092,9 +3092,6 @@ class Atoms(ASEAtoms):
         if magmoms is not None:
             if len(magmoms) != len(self):
                 raise ValueError("magmons can be collinear or non-collinear.")
-            for ind, element in enumerate(self.get_chemical_elements()):
-                if "spin" in element.tags.keys():
-                    self[ind] = element.Parent
             if "spin" not in self._tag_list._lists.keys():
                 self.add_tag(spin=None)
             for ind, spin in enumerate(magmoms):
