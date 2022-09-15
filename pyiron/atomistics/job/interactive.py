@@ -3,7 +3,7 @@
 # Distributed under the terms of "New BSD License", see the LICENSE file.
 
 import numpy as np
-from pyiron.base.settings.generic import Settings
+from pyiron.base.settings.generic import settings
 from pyiron.base.job.interactive import InteractiveBase
 from pyiron.atomistics.structure.atoms import Atoms
 from pyiron.atomistics.structure.periodic_table import PeriodicTable
@@ -21,7 +21,7 @@ __email__ = "janssen@mpie.de"
 __status__ = "development"
 __date__ = "Sep 1, 2017"
 
-s = Settings()
+s = settings
 
 
 class GenericInteractive(AtomisticGenericJob, InteractiveBase):
@@ -120,11 +120,9 @@ class GenericInteractive(AtomisticGenericJob, InteractiveBase):
             raise ValueError("Input structure not set. Use method set_structure()")
         if not self.interactive_is_activated():
             self.interactive_initialize_interface()
-        pre_struct = self.get_structure(-1)
-        if pre_struct is not None:
-            self._structure_previous = pre_struct
-        else:
+        if self._structure_previous is None:
             self._structure_previous = self.structure.copy()
+        self._update_previous_structure()
         if self._structure_current is not None:
             if (
                 len(self._structure_current) != len(self._structure_previous)
@@ -175,8 +173,8 @@ class GenericInteractive(AtomisticGenericJob, InteractiveBase):
 
     def interactive_positions_organizer(self):
         if not np.allclose(
-            self._structure_current.get_scaled_positions(),
-            self._structure_previous.get_scaled_positions(),
+            self._structure_current.positions,
+            self._structure_previous.positions,
             rtol=1e-15,
             atol=1e-15,
         ):
@@ -193,9 +191,12 @@ class GenericInteractive(AtomisticGenericJob, InteractiveBase):
             )
         ):
             self._logger.debug("Generic library: magnetic moments changed!")
-            self.interactive_spin_constraints_setter(
-                self._structure_current.get_initial_magnetic_moments()
-            )
+            try:
+                self.interactive_spin_constraints_setter(
+                    self._structure_current.get_initial_magnetic_moments()
+                )
+            except NotImplementedError:
+                del self.interactive_input_functions['magnetic_moments']
 
     def interactive_cells_getter(self):
         return self.initial_structure.cell
@@ -268,64 +269,28 @@ class GenericInteractive(AtomisticGenericJob, InteractiveBase):
     def interactive_volume_getter(self):
         return self.initial_structure.get_volume()
 
-    def get_structure(self, iteration_step=-1, wrap_atoms=True):
+    def _update_previous_structure(self):
         """
-        Gets the structure from a given iteration step of the simulation (MD/ionic relaxation). For static calculations
-        there is only one ionic iteration step
+        Update the previous structure to the last step configuration
         Args:
-            iteration_step (int): Step for which the structure is requested
-
-        Returns:
-            atomistics.structure.atoms.Atoms object
+            wrap_atoms (bool):
         """
-        if (
-            self.server.run_mode.interactive
-            or self.server.run_mode.interactive_non_modal
-        ):
-            # Warning: We only copy symbols, positions and cell information - no tags.
-            if self.output.indices is not None and len(self.output.indices) != 0:
-                indices = self.output.indices[iteration_step]
-            else:
-                return None
-            if len(self._interactive_species_lst) == 0:
-                el_lst = [el.Abbreviation for el in self.structure.species]
-            else:
-                el_lst = self._interactive_species_lst.tolist()
-            if indices is not None:
-                if wrap_atoms:
-                    positions = self.output.positions[iteration_step]
-                else:
-                    if len(self.output.unwrapped_positions) > max([iteration_step, 0]):
-                        positions = self.output.unwrapped_positions[iteration_step]
-                    else:
-                        positions = (
-                            self.output.positions[iteration_step]
-                            + self.output.total_displacements[iteration_step]
-                        )
-                atoms = Atoms(
-                    symbols=np.array([el_lst[el] for el in indices]),
-                    positions=positions,
-                    cell=self.output.cells[iteration_step],
-                    pbc=self.structure.pbc,
-                )
-                # Update indicies to match the indicies in the cache.
-                atoms.set_species([self._periodic_table.element(el) for el in el_lst])
-                atoms.indices = indices
-                if wrap_atoms:
-                    atoms = atoms.center_coordinates_in_unit_cell()
-                return atoms
-            else:
-                return None
+        try:
+            indices = self.output.indices[-1]
+            positions = self.output.positions[-1]
+            cell = self.output.cells[-1]
+        except IndexError:
+            return
+        if len(self._interactive_species_lst) == 0:
+            el_lst = [el.Abbreviation for el in self.structure.species]
         else:
-            if (
-                self.get("output/generic/cells") is not None
-                and len(self.get("output/generic/cells")) != 0
-            ):
-                return super(GenericInteractive, self).get_structure(
-                    iteration_step=iteration_step, wrap_atoms=wrap_atoms
-                )
-            else:
-                return None
+            el_lst = self._interactive_species_lst.tolist()
+        self._structure_previous = self._structure_previous.__class__(
+            positions=positions,
+            cell=cell,
+            indices=indices,
+            species=[self._periodic_table.element(el) for el in el_lst],
+        )
 
     @staticmethod
     def _extend_species_elements(struct_species, species_array):
@@ -449,18 +414,27 @@ class GenericInteractiveOutput(GenericOutput):
 
     def _key_from_hdf(self, key):
         """
-        Get all entries from the HDF5 file for a specific key - stored under 'output/interactive/<key>'
-
+        Get all entries from the HDF5 file for a specific key - stored under 'output/interactive/<key>'.  If not found
+        there the key is looked up in the regular HDF storage location 'output/<key>' via the property on our super
+        class :class:`.GenericOutput`.
         Args:
             key (str): name of the key
-
         Returns:
-
         """
-        return self._job["output/interactive/" + key]
+        try:
+            fetched = self._job.project_hdf5["output/interactive/" + key]
+        except ValueError:
+            fetched = None
+        if fetched is None or len(fetched) == 0:
+            fetched = getattr(super(), key)
+        return fetched
 
     def _key_from_property(self, key, prop):
         """
+        Fetch values for the given and property from interactive HDF5.
+
+        Values are first looked up in the interactive cache, then in the interactive group in the HDF5 file
+        ('output/interactive/<key>') and if not found there via the given prop function.
 
         Args:
             key (str): name of the key
@@ -472,39 +446,37 @@ class GenericInteractiveOutput(GenericOutput):
         return_lst = self._key_from_cache(key)
         hdf5_output = self._key_from_hdf(key)
         if hdf5_output is not None:
-            return_lst = hdf5_output.tolist() + return_lst
+            return np.concatenate([hdf5_output, *return_lst])
         else:
             prop_result = prop(self)
             if prop_result is not None:
-                return_lst = prop(self).tolist() + return_lst
-        return np.array(return_lst)
-
-    def _lst_from_property(self, key, prop=None):
-        """
-
-        Args:
-            key (str):
-            prop (function):
-
-        Returns:
-
-        """
-        return_lst = self._lst_from_cache(key)
-        hdf5_output = self._key_from_hdf(key)
-        if hdf5_output is not None and len(hdf5_output) != 0:
-            if isinstance(hdf5_output[-1], list):
-                return_lst = [np.array(out) for out in hdf5_output] + return_lst
+                return np.concatenate([prop_result, *return_lst])
             else:
-                return_lst = hdf5_output.tolist() + return_lst
-        elif prop is not None:
-            prop_result = prop(self)
-            if prop_result is not None:
-                return_lst = prop_result.tolist() + return_lst
-        return np.array(return_lst)
+                return np.asarray(return_lst)
+
+    def _lst_from_property(self, key):
+        """
+        Fetch latest values for the given property.
+        Values are first looked up in the interactive cache, then in the interactive group in the HDF5 file
+        ('output/interactive/<key>') and if not found there via approriate getter from our super class (GenericOutput).
+        That means that key needs to be a property defined there.
+        Args:
+            key (str): output key
+        Returns:
+            :class:`numpy.ndarray`: collected values from all previous steps
+        """
+        cached = np.array(self._lst_from_cache(key))
+        fetched = self._key_from_hdf(key)
+        if fetched is None or len(fetched) == 0:
+            return cached
+        elif len(cached) == 0:
+            return fetched
+        else:
+            return np.concatenate((cached, fetched))
 
     @property
     def indices(self):
-        return self._lst_from_property(key="indices", prop=GenericOutput.indices.fget)
+        return self._lst_from_property("indices")
 
     @property
     def cells(self):
@@ -524,13 +496,11 @@ class GenericInteractiveOutput(GenericOutput):
 
     @property
     def forces(self):
-        return self._lst_from_property(key="forces", prop=GenericOutput.forces.fget)
+        return self._lst_from_property("forces")
 
     @property
     def positions(self):
-        return self._lst_from_property(
-            key="positions", prop=GenericOutput.positions.fget
-        )
+        return self._lst_from_property("positions")
 
     @property
     def pressures(self):
@@ -556,9 +526,7 @@ class GenericInteractiveOutput(GenericOutput):
 
     @property
     def unwrapped_positions(self):
-        return self._lst_from_property(
-            key="unwrapped_positions", prop=GenericOutput.unwrapped_positions.fget
-        )
+        return self._lst_from_property("unwrapped_positions")
 
     @property
     def volume(self):
