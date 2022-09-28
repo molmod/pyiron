@@ -21,6 +21,7 @@ select name in ${courses[@]}; do
 done
 
 # Make a symbolic link for non phd students
+# In the case of nano and atmol courses, remove any existing resource folder for a clean resource install
 case $name in
     phd)
         location=$VSC_SCRATCH_KYUKON_VO_USER
@@ -30,16 +31,24 @@ case $name in
     nano)
         location=$VSC_SCRATCH_KYUKON
         folder="nanoscale"
-        if [ ! -f "scratch" ]; then
+        if [ ! -L "scratch" ]; then
             ln -s $location scratch
+        fi
+        if [ -d "scratch/pyiron/resources" ]; then
+            echo "Removing existing resource folder and replacing it with a fresh install." 
+            rm -r scratch/pyiron/resources
         fi
         ;;
 
     atmol)
         location=$VSC_SCRATCH_KYUKON
         folder="atmol"
-        if [ ! -f "scratch" ]; then
+        if [ ! -L "scratch" ]; then
             ln -s $location scratch
+        fi
+        if [ -d "scratch/pyiron/resources" ]; then
+            echo "Removing existing resource folder and replacing it with a fresh install." 
+            rm -r scratch/pyiron/resources
         fi
         ;;
 esac
