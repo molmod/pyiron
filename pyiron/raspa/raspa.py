@@ -7,6 +7,7 @@ from molmod.units import *
 from molmod.constants import *
 from molmod.periodic import periodic as pt
 import subprocess
+import pathlib
 
 import os, posixpath, numpy as np, h5py, matplotlib.pyplot as pp, stat, warnings, glob, re
 
@@ -304,6 +305,10 @@ def write_input(input_dict, working_directory='.'):
     if len(definitions)>0:
         for k,definition in definitions.items():
             new_file_loc = definition.split('/')[-1]
+            if k.split('_')[-1]=='fname': # both component and system fnames should correspond to the provided names
+                fname = '_'.join(k.split('_')[1:-1])
+                new_file_loc = fname + pathlib.Path(new_file_loc).suffix
+            
             with open(definition,'r') as f:
                 text = f.read()
             with open(os.path.join(working_directory, new_file_loc), 'w') as f:

@@ -254,7 +254,7 @@ class GPXRD(AtomisticGenericJob):
                 file location for the plot
 
             ***Returns***
-                a new reference pattern (ttetha,intensity) array
+                a new reference pattern (ttheta,intensity) array
         """
 
         # Interactively use the pyobjcryst code here, it should not be necessary to run a separate job for this
@@ -274,24 +274,36 @@ class GPXRD(AtomisticGenericJob):
         ttheta = pp.GetPowderPatternX()/deg
         reference = pp.GetPowderPatternObs()
 
+        if ttheta.shape == (0,):
+            raise ValueError('Did not succeed in loading reference data. Try explicitely loading your data as an array instead.')
+
+
         # Background
         if locs is not None:
             bx = np.array(locs)
+            # Keep first location index for clear plot
         else:
             if bkg_range is not None:
                 assert len(bkg_range)==2
                 bx=np.linspace(bkg_range[0],bkg_range[1],bkg_points)
             else:
                 bx=np.linspace(ttheta.min(),ttheta.max(),bkg_points)
-            if not uniform:
-                # adapt bx to minima of reference pattern in each neighbourhood (optional)
-                idx = [np.argmin(np.abs(ttheta-bxi)) for bxi in bx]
-                step = (idx[1] - idx[0])//4
-                for n in range(len(bx)):
-                    mn = -step if idx[n]>step else 0
-                    mx = step if n<(len(idx)-1) else 0
-                    bx[n] = ttheta[idx[n]+ mn + np.argmin(reference[idx[n]+mn:idx[n]+mx])]
+        
+        # Keep first location index for clear plot
+        idx = [np.argmin(np.abs(ttheta-bxi)) for bxi in bx]
+        reference_idx = idx[0]
+                
+        # Adapt bx to minima of reference pattern in each neighbourhood (optional)
+        if locs is None and not uniform:
+            idx = [np.argmin(np.abs(ttheta-bxi)) for bxi in bx]
+            step = (idx[1] - idx[0])//4
+            for n in range(len(bx)):
+                mn = -step if idx[n]>step else 0
+                mx = step if n<(len(idx)-1) else 0
+                bx[n] = ttheta[idx[n]+ mn + np.argmin(reference[idx[n]+mn:idx[n]+mx])]
+                if n==0: reference_idx = idx[n]+ mn + np.argmin(reference[idx[n]+mn:idx[n]+mx])
 
+        
         bx*=deg
         by=np.zeros(bx.shape)
         b=pp.AddPowderPatternBackground()
@@ -301,6 +313,7 @@ class GPXRD(AtomisticGenericJob):
 
         no_bg = pp.GetPowderPatternObs()-pp.GetPowderPatternCalc()
         no_bg -= np.min(no_bg)
+        
 
         # Plot the difference
         if plot:
@@ -309,8 +322,10 @@ class GPXRD(AtomisticGenericJob):
 
             fig = pt.figure()
             ax1 = pt.gca()
-            ax1.plot(ttheta,pp.GetPowderPatternCalc(),lw=1,label='background')
-            ax1.plot(ttheta,reference - reference.min(),lw=1,label='reference')
+            background = pp.GetPowderPatternCalc() - pp.GetPowderPatternCalc().min()
+            reference_pattern = reference - reference.min()
+            ax1.plot(ttheta,background - (background[reference_idx]- reference_pattern[reference_idx]),lw=1,label='background')
+            ax1.plot(ttheta,reference_pattern,lw=1,label='reference')
             ax1.plot(ttheta,no_bg-height*0.1,color='g',lw=1,label=r'$\Delta$')
             ax1.set_xlabel('2θ (°)')
             ax1.set_ylabel('Intensity (a.u.)')
