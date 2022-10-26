@@ -79,6 +79,7 @@ class ChunkedStorageParser:
             data = self.h5['trajectory/pos']
         else:
             data = self.h5['system/pos']
+            data = np.array(data).reshape((1,*data.shape))
 
         if info:
             return data.shape, data.dtype
@@ -92,6 +93,7 @@ class ChunkedStorageParser:
             data = self.h5['trajectory/cell']
         elif 'rvecs' in self.h5['system'].keys():
             data = self.h5['system/rvecs']
+            data = np.array(data).reshape((1,*data.shape))
         else:
             return None
         if info:
@@ -160,6 +162,7 @@ class ChunkedStorageParser:
             data = -self.h5['trajectory/gradient']
         elif 'hessian' in self.h5['system'].keys():
             data = -self.h5['system/gpos'][:]
+            data = np.array(data).reshape((1,*data.shape))
         else:
             return None
         if info:
@@ -218,6 +221,7 @@ class ChunkedStorageParser:
             data = self.h5['trajectory/epot']
         elif 'energy' in self.h5['system'].keys():
             data = self.h5['system/energy']
+            data = np.array(data).reshape((1,*data.shape))
         else:
             return None
         if info:
