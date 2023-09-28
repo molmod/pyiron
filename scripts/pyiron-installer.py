@@ -128,7 +128,7 @@ download_path = write_full_environ_var(env_loc=None,location=location)
 download_resources(zip_file="resources.zip",
                    resource_directory=os.path.join(download_path,'pyiron/resources'),
                    projects_directory=os.path.join(download_path,'pyiron/projects'),
-                   giturl_for_zip_file="https://github.com/SanderBorgmans/pyiron-resources/archive/hpc_ugent.zip",
+                   giturl_for_zip_file="https://github.com/molmod/pyiron-resources/archive/hpc_ugent.zip",
                    git_folder_name="pyiron-resources-hpc_ugent")
 
 # Create the specified folder
